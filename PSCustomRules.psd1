@@ -12,7 +12,7 @@
 RootModule = 'PSCustomRules.psm1'
 
 # Version number of this module.
-ModuleVersion = '0.1.0'
+ModuleVersion = '0.1.1'
 
 # Supported PSEditions
 CompatiblePSEditions = 'Core', 'Desktop'
@@ -110,7 +110,7 @@ PrivateData = @{
         # IconUri = ''
 
         # ReleaseNotes of this module
-        ReleaseNotes = 'Initial version'
+        ReleaseNotes = 'See CHANGELOG.md'
 
         # Prerelease string of this module
         # Prerelease = ''
