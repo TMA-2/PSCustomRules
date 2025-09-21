@@ -2,14 +2,31 @@
 #Requires -Version 5.1
 #Requires -Modules PSScriptAnalyzer
 
+using namespace System
+using namespace System.Diagnostics.CodeAnalysis
+# using module Public\Measure-NewObject.psm1
+# using module Public\Measure-LongTypeNames.psm1
+# using module Public\Measure-TypedVariableSpacing.psm1
+
+# Get script files
+$PrivateScripts = gci "$PSScriptRoot\Private\*" -Include '*.ps1','*.psm1'
+$PublicScripts = gci "$PSScriptRoot\Public\*" -Include '*.ps1','*.psm1'
+
 # Import private functions
-Get-ChildItem -Path "$PSScriptRoot\Private\*" -Include '*.ps1','*.psm1' | ForEach-Object {
+$PrivateScripts | ? Extension -eq '.ps1' | % {
     . $_.FullName
 }
-
 # Import public functions
-Get-ChildItem -Path "$PSScriptRoot\Public\*" -Include '*.ps1','*.psm1' | ForEach-Object {
+$PublicScripts | ? Extension -eq '.ps1' | % {
     . $_.FullName
+}
+# Import private module files
+$PrivateScripts | ? Extension -eq '.psm1' | % {
+    ipmo $_.FullName
+}
+# Import public module files
+$PublicScripts | ? Extension -eq '.psm1' | % {
+    ipmo $_.FullName
 }
 
 $Functions = @(
