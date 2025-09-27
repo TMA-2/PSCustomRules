@@ -11,30 +11,34 @@ using namespace Microsoft.Windows.Powershell.ScriptAnalyzer.Generic
 #   Parameter = ParameterMetadata
 #   Name = Value = 'System.IO.FileInfo'
 
-<#
-.SYNOPSIS
-    Use static New constructor instead of New-Object cmdlet to create objects.
-.DESCRIPTION
-    Whenever available in version 5.0 or later, use the static New constructor instead of the New-Object cmdlet to create objects. The static New constructor is faster and more efficient than the New-Object cmdlet.
-.EXAMPLE
-    Measure-NewObject $CommandAst
-.INPUTS
-    [System.Management.Automation.Language.CommandAst]
-.OUTPUTS
-    [Microsoft.Windows.Powershell.ScriptAnalyzer.Generic.DiagnosticRecord[]]
-.LINK
-    https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/create-custom-rule?view=ps-modules
-.LINK
-    https://github.com/PowerShell/PSScriptAnalyzer/blob/main/Tests/Engine/CommunityAnalyzerRules/CommunityAnalyzerRules.psm1
-.NOTES
-    Reference: Who knows.
-#>
-function Measure-NewObject {
+# PSUseStaticConstructor
+function Measure-UseStaticConstructor {
+    <#
+    .SYNOPSIS
+        Use static New constructor instead of New-Object cmdlet to create objects.
+    .DESCRIPTION
+        Whenever available in version 5.0 or later, use the static New constructor instead of the New-Object cmdlet to create objects. The static New constructor is faster and more efficient than the New-Object cmdlet.
+    .EXAMPLE
+        Measure-NewObject $CommandAst
+    .INPUTS
+        [System.Management.Automation.Language.CommandAst]
+    .OUTPUTS
+        [Microsoft.Windows.Powershell.ScriptAnalyzer.Generic.DiagnosticRecord[]]
+    .LINK
+        https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/create-custom-rule?view=ps-modules
+    .LINK
+        https://github.com/PowerShell/PSScriptAnalyzer/blob/main/Tests/Engine/CommunityAnalyzerRules/CommunityAnalyzerRules.psm1
+    .NOTES
+        Reference: Who knows.
+    #>
     [CmdletBinding()]
     [OutputType([DiagnosticRecord[]])]
     param
     (
-        [Parameter(Mandatory)]
+        [Parameter(
+            Mandatory,
+            ValueFromPipeline
+        )]
         [ValidateNotNullOrEmpty()]
         [scriptblock]
         $ScriptBlock
@@ -50,7 +54,7 @@ function Measure-NewObject {
 
         # Checks New-Object without ComObject parameter command only.
         if ($CommandAst.GetCommandName() -ne 'new-object') {
-            return $results
+            return
         }
 
         try {
@@ -58,23 +62,23 @@ function Measure-NewObject {
             foreach ($sbResult in $sbResults) {
                 if ($sbResults.BoundParameters.ContainsKey('ComObject')) {
                     # we can't do anything to convert ComObject creation, so just return
-                    return $results
+                    return
                 }
                 # get typename parameter
-                if($sbResults.BoundParameters.ContainsKey('TypeName')) {
+                if ($sbResults.BoundParameters.ContainsKey('TypeName')) {
                     $TypeName = $sbResults.BoundParameters['TypeName'].Value
                 }
                 # get argument list parameter
-                if($sbResults.BoundParameters.ContainsKey('ArgumentList')) {
+                if ($sbResults.BoundParameters.ContainsKey('ArgumentList')) {
                     $ArgumentList = $sbResults.BoundParameters['ArgumentList'].Value
                 }
-                if($TypeName) {
+                if ($TypeName) {
                     # Find full type name
                     $FullType = [appdomain]::CurrentDomain.GetAssemblies().GetTypes().Where({ $_.IsPublic -and ($_.FullName -eq $TypeName -or $_.FullName -match "[\w.]+\.${TypeName}$" -or ($_.Name -eq $TypeName -and $_.Namespace -eq 'System')) })
 
                     # Find constructors
                     $TypeCtors = $FullType.GetConstructors()
-                    if($TypeCtors.Count -eq 0) {
+                    if ($TypeCtors.Count -eq 0) {
                         Write-Verbose "No public constructors found for type $TypeName"
                         return
                     }
@@ -86,7 +90,7 @@ function Measure-NewObject {
                     [int]$endLineNumber = $commandAst.Extent.EndLineNumber
                     [int]$startColumnNumber = $commandAst.Extent.StartColumnNumber
                     [int]$endColumnNumber = $commandAst.Extent.EndColumnNumber
-                    if($ArgumentList) {
+                    if ($ArgumentList) {
                         [string]$correction = "[$TypeName]::new($ArgumentList)"
                     }
                     else {

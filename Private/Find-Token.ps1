@@ -36,11 +36,12 @@ function Find-Token {
 
     process {
         $Token = $null
+        $Errors = $null
         if($ParamSet -eq 'Path') {
-            [Parser]::ParseFile($Path, [ref]$Token, [ref]$null) | Out-Null
+            [Parser]::ParseFile($Path, [ref]$Token, [ref]$Errors) | Out-Null
         }
         elseif($ParamSet -eq 'Script') {
-            [Parser]::ParseInput($Script, [ref]$Token, [ref]$null) | Out-Null
+            [Parser]::ParseInput($Script, [ref]$Token, [ref]$Errors) | Out-Null
         }
         $Token | ? {$_.Kind -eq $TokenKind}
     }

@@ -31,8 +31,8 @@ $PublicScripts | ? Extension -eq '.psm1' | % {
 
 $Functions = @(
     'Measure-TypedVariableSpacing'
-    'Measure-LongTypeNames'
-    'Measure-NewObject'
+    'Measure-AvoidLongTypeNames'
+    'Measure-UseStaticConstructor'
 )
 
 Export-ModuleMember -Function $Functions

@@ -35,13 +35,16 @@ Attempts to offer a fix that inserts a `using namespace` reference at the top of
 ```
 
 #### Example
+*Before*
 ```powershell
-# before
+# 48 chars
 [System.Collections.Specialized.OrderedDictionary]::new()
-
-# after
+```
+*After*`
+```powershell
 using namespace System.Collections.Specialized
 
+# 17 chars
 [OrderedDictionary]::new()
 ```
 
@@ -58,7 +61,8 @@ $Type = [Microsoft.Win32.Registry]::new()
 ```
 
 ## References
-- See [this custom rule example](https://github.com/bergmeister/PSScriptAnalyzer-VSCodeIntegration) for how to define and include custom rules in VSCode.
-- See [custom Indented.ScriptAnalyzerRules module](https://github.com/indented-automation/Indented.ScriptAnalyzerRules)
+- See [the official CommunityAnalyzerRules](https://github.com/PowerShell/PSScriptAnalyzer/blob/main/Tests/Engine/CommunityAnalyzerRules/CommunityAnalyzerRules.psm1)
+- See [this custom rule example](https://github.com/bergmeister/PSScriptAnalyzer-VSCodeIntegration) for how to define and include custom rules in VSCode
+- See [custom Indented.ScriptAnalyzerRules module](https://github.com/indented-automation/Indented.ScriptAnalyzerRules) for custom rules
 - See [PSScriptAnalyzer docs on custom rules](https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/create-custom-rule?view=ps-modules)
 - See [PSScriptAnalyzer docs on using custom rules](https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/using-scriptanalyzer?view=ps-modules#custom-rules)
