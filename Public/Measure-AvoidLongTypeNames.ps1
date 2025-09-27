@@ -5,10 +5,26 @@ using namespace System.Management.Automation.Language
 using namespace Microsoft.Windows.PowerShell.ScriptAnalyzer
 using namespace Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic
 
-# ref: https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/create-custom-rule?view=ps-modules
-
-function Measure-LongTypeNames {
-    [OutputType([DiagnosticRecord[]])]
+# PSAvoidLongTypeNames
+function Measure-AvoidLongTypeNames {
+    <#
+    .SYNOPSIS
+        Finds long type names and suggests using statements to shorten them.
+    .DESCRIPTION
+        This function analyzes the provided script block AST for long type names and suggests corrections that add using statements, shortening the actual reference to only the class name.
+    .PARAMETER ScriptBlockAst
+        The script block AST to analyze.
+        This parameter is automatically provided by PSScriptAnalyzer.
+    .PARAMETER Settings
+        Custom settings. Supports MaxLength (int) to define what constitutes a "long" type name. Default is 30.
+        This parameter is automatically provided by PSScriptAnalyzer.
+    .EXAMPLE
+        PS C:\> Measure-LongTypeNames -ScriptBlockAst $scriptBlockAst -Settings @{ MaxLength = 25 }
+        Analyzes the provided script block AST for long type names longer than 25 characters and suggests corrections.
+    .NOTES
+        Used in conjunction with PSScriptAnalyzer.
+    #>
+    [OutputType([DiagnosticRecord])]
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -18,22 +34,22 @@ function Measure-LongTypeNames {
         [hashtable]$Settings = @{}
     )
 
-    if(-not $Settings.Enable) {
+    if (-not $Settings.Enable) {
         return
     }
 
     [int]$MaxTypeNameLength = 30
 
-    if($Settings.MaxLength) {
+    if ($Settings.MaxLength) {
         $MaxTypeNameLength = $Settings.MaxLength
     }
 
     # Find all "requires" comment tokens and save the last line extent
     $ScriptBlockString = $ScriptBlockAst.ToString()
-    $RequiresStatements = Find-Token -Script $ScriptBlockString -TokenKind 'Comment' | ? Text -Match '^#requires -'
+    $RequiresStatements = Find-Token -Script $ScriptBlockString -TokenKind 'Comment' | Where-Object Text -Match '^#requires -'
 
     [int]$endLine = 1
-    foreach($RequiresStatement in $RequiresStatements) {
+    foreach ($RequiresStatement in $RequiresStatements) {
         [int]$endLine = $RequiresStatement.Extent.EndLineNumber + 1
     }
 
@@ -46,10 +62,10 @@ function Measure-LongTypeNames {
 
     # Check for existing using statements
     $existingUsings = $ScriptBlockAst.FindAll({
-        param($ast)
-        $ast -is [UsingStatementAst] -and
-        $ast.UsingStatementKind -eq 'Namespace'
-    }, $true)
+            param($ast)
+            $ast -is [UsingStatementAst] -and
+            $ast.UsingStatementKind -eq 'Namespace'
+        }, $true)
 
     $defaultNamespaces = @(
         'System'
@@ -60,10 +76,10 @@ function Measure-LongTypeNames {
 
     # Find type expressions
     $typeExpressions = $ScriptBlockAst.FindAll({
-        param($ast)
-        $ast -is [TypeExpressionAst] -or
-        $ast -is [TypeConstraintAst]
-    }, $true)
+            param($ast)
+            $ast -is [TypeExpressionAst] -or
+            $ast -is [TypeConstraintAst]
+        }, $true)
 
     # Group by namespace to avoid conflicts
     $classNameUsage = @{}
@@ -105,15 +121,15 @@ function Measure-LongTypeNames {
                         $endLine, $endLine, 1, 1,
                         "using namespace $namespace`r`n",
                         $typeExpr.Extent.File,
-                        "Add using namespace"
+                        'Add using namespace'
                     )
                 )
 
                 [DiagnosticRecord]@{
-                    Message = "Long type name detected: consider 'using namespace $namespace' and shorten to [$className]"
-                    Extent = $typeExpr.Extent
-                    RuleName = 'PSAvoidLongTypeNames'
-                    Severity = 'Information'
+                    Message              = "Long type name detected: consider 'using namespace $namespace' and shorten to [$className]"
+                    Extent               = $typeExpr.Extent
+                    RuleName             = 'PSAvoidLongTypeNames'
+                    Severity             = 'Information'
                     SuggestedCorrections = $corrections
                 }
             }
