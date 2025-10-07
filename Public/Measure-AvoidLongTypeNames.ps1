@@ -2,6 +2,8 @@
 
 using namespace System.Management.Automation
 using namespace System.Management.Automation.Language
+using namespace System.Collections.ObjectModel
+using namespace System.Collections.Generic
 using namespace Microsoft.Windows.PowerShell.ScriptAnalyzer
 using namespace Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic
 
@@ -24,115 +26,158 @@ function Measure-AvoidLongTypeNames {
     .NOTES
         Used in conjunction with PSScriptAnalyzer.
     #>
-    [OutputType([DiagnosticRecord])]
+    [OutputType([List[DiagnosticRecord]])]
     [CmdletBinding()]
-    param(
+    param (
         [Parameter(Mandatory)]
         [ScriptBlockAst]
         $ScriptBlockAst,
 
-        [hashtable]$Settings = @{}
+        [hashtable]
+        $Settings
     )
 
-    if (-not $Settings.Enable) {
-        return
+    begin {
+        [int]$MaxTypeNameLength = 30
+        $defaultNamespaces = [string[]]@(
+            'System'
+            'System.Management.Automation'
+        )
     }
 
-    [int]$MaxTypeNameLength = 30
+    process {
+        $DiagnosticRecords = [List[DiagnosticRecord]]::new()
 
-    if ($Settings.MaxLength) {
-        $MaxTypeNameLength = $Settings.MaxLength
-    }
+        if ($Settings -and -not $Settings['Enable']) {
+            return
+        }
 
-    # Find all "requires" comment tokens and save the last line extent
-    $ScriptBlockString = $ScriptBlockAst.ToString()
-    $RequiresStatements = Find-Token -Script $ScriptBlockString -TokenKind 'Comment' | Where-Object Text -Match '^#requires -'
+        if ($Settings.MaxLength) {
+            $MaxTypeNameLength = $Settings.MaxLength
+        }
 
-    [int]$endLine = 1
-    foreach ($RequiresStatement in $RequiresStatements) {
-        [int]$endLine = $RequiresStatement.Extent.EndLineNumber + 1
-    }
+        try {
+            # Find all "requires" comment tokens and save the last line extent
+            $ScriptBlockString = $ScriptBlockAst.ToString()
+            $RequiresStatements = Find-Token -Script $ScriptBlockString -TokenKind 'Comment' | Where-Object Text -Match '^#requires -'
+        }
+        catch {
+            $Err = $_
+            throw "Exception $($Err.Exception.HResult) finding comment tokens in scriptblock > $($Err.Exception.Message)"
+        }
 
-    # Alternate method
-    # if($ScriptBlockAst.ScriptRequirements.IsElevationRequired) {$endLine++}
-    # if($ScriptBlockAst.ScriptRequirements.RequiredAssemblies) {$endLine++}
-    # if($ScriptBlockAst.ScriptRequirements.RequiredModules) {$endLine++}
-    # if($ScriptBlockAst.ScriptRequirements.RequiredPSEditions) {$endLine++}
-    # if($ScriptBlockAst.ScriptRequirements.RequiredPSVersion) {$endLine++}
+        [int]$endLine = 1
+        foreach ($RequiresStatement in $RequiresStatements) {
+            [int]$endLine = $RequiresStatement.Extent.EndLineNumber + 1
+        }
 
-    # Check for existing using statements
-    $existingUsings = $ScriptBlockAst.FindAll({
-            param($ast)
-            $ast -is [UsingStatementAst] -and
-            $ast.UsingStatementKind -eq 'Namespace'
-        }, $true)
+        # Alternate method
+        # if($ScriptBlockAst.ScriptRequirements.IsElevationRequired) {$endLine++}
+        # if($ScriptBlockAst.ScriptRequirements.RequiredAssemblies) {$endLine++}
+        # if($ScriptBlockAst.ScriptRequirements.RequiredModules) {$endLine++}
+        # if($ScriptBlockAst.ScriptRequirements.RequiredPSEditions) {$endLine++}
+        # if($ScriptBlockAst.ScriptRequirements.RequiredPSVersion) {$endLine++}
 
-    $defaultNamespaces = @(
-        'System'
-        'System.Management.Automation'
-    )
+        try {
+            # Check for existing using statements
+            $existingUsings = $ScriptBlockAst.FindAll({
+                    param($ast)
+                    $ast -is [UsingStatementAst] -and
+                    $ast.UsingStatementKind -eq 'Namespace'
+                }, $true)
+        }
+        catch {
+            $Err = $_
+            throw "Exception $($Err.Exception.HResult) traversing 'using namespace' AST entries > $($Err.Exception.Message)"
+        }
 
-    $existingNamespaces = $existingUsings | ForEach-Object { $_.Name.Value }
+        $existingNamespaces = $existingUsings | ForEach-Object { $_.Name.Value }
 
-    # Find type expressions
-    $typeExpressions = $ScriptBlockAst.FindAll({
-            param($ast)
-            $ast -is [TypeExpressionAst] -or
-            $ast -is [TypeConstraintAst]
-        }, $true)
+        try {
+            # Find type expressions
+            $typeExpressions = $ScriptBlockAst.FindAll({
+                    param($ast)
+                    $ast -is [TypeExpressionAst] -or
+                    $ast -is [TypeConstraintAst]
+                }, $true)
+        }
+        catch {
+            $Err = $_
+            throw "Exception $($Err.Exception.HResult) parsing AST for type expressions > $($Err.Exception.Message)"
+        }
 
-    # Group by namespace to avoid conflicts
-    $classNameUsage = @{}
+        # Group by namespace to avoid conflicts
+        $classNameUsage = @{}
 
-    foreach ($typeExpr in $typeExpressions) {
-        $typeName = $typeExpr.TypeName.FullName
+        foreach ($typeExpr in $typeExpressions) {
+            $typeName = $typeExpr.TypeName.FullName
+            $suggestedCorrections = [Collection[CorrectionExtent]]::new()
 
-        if ($typeName.Length -gt $MaxTypeNameLength -and $typeName.Contains('.') -or ($typeName -match "^$defaultNamespaces\.\w+")) {
-            $lastDotIndex = $typeName.LastIndexOf('.')
-            $namespace = $typeName.Substring(0, $lastDotIndex)
-            $className = $typeName.Substring($lastDotIndex + 1)
+            if ($typeName.Length -gt $MaxTypeNameLength -and $typeName.Contains('.') -or ($typeName -match "^$defaultNamespaces\.\w+")) {
+                $lastDotIndex = $typeName.LastIndexOf('.')
+                $namespace = $typeName.Substring(0, $lastDotIndex)
+                $className = $typeName.Substring($lastDotIndex + 1)
 
-            # Skip complex types and already imported namespaces
-            if (-not ($className.Contains('`') -or $className.Contains('+')) -and
-                $namespace -notin $existingNamespaces) {
+                # Skip complex types and already imported namespaces
+                if (-not ($className.Contains('`') -or $className.Contains('+')) -and
+                    $namespace -notin $existingNamespaces) {
 
-                # Check for class name conflicts
-                if ($classNameUsage.ContainsKey($className) -and
-                    $classNameUsage[$className] -ne $namespace) {
-                    continue # Skip if class name would conflict
-                }
+                    try {
+                        # Check for class name conflicts
+                        if ($classNameUsage.ContainsKey($className) -and
+                            $classNameUsage[$className] -ne $namespace) {
+                            continue # Skip if class name would conflict
+                        }
 
-                $classNameUsage[$className] = $namespace
+                        $classNameUsage[$className] = $namespace
 
-                $originalText = $typeExpr.Extent.Text
-                $correctedText = $originalText -replace [regex]::Escape($typeName), $className
+                        $extent = $typeExpr.Extent
+                        $originalText = $extent.Text
+                        $correctedText = $originalText -replace [regex]::Escape($typeName), $className
 
-                $corrections = @(
-                    [CorrectionExtent]::new(
-                        $typeExpr.Extent.StartLineNumber,
-                        $typeExpr.Extent.EndLineNumber,
-                        $typeExpr.Extent.StartColumnNumber,
-                        $typeExpr.Extent.EndColumnNumber,
-                        $correctedText,
-                        $typeExpr.Extent.File,
-                        "Shorten to $className"
-                    ),
-                    [CorrectionExtent]::new(
-                        $endLine, $endLine, 1, 1,
-                        "using namespace $namespace`r`n",
-                        $typeExpr.Extent.File,
-                        'Add using namespace'
-                    )
-                )
+                        $suggestedCorrections.Add([CorrectionExtent]::new(
+                                $extent.StartLineNumber,
+                                $extent.EndLineNumber,
+                                $extent.StartColumnNumber,
+                                $extent.EndColumnNumber,
+                                $correctedText,
+                                $extent.File,
+                                "Shorten to $className"
+                            ))
 
-                [DiagnosticRecord]@{
-                    Message              = "Long type name detected: consider 'using namespace $namespace' and shorten to [$className]"
-                    Extent               = $typeExpr.Extent
-                    RuleName             = 'PSAvoidLongTypeNames'
-                    Severity             = 'Information'
-                    SuggestedCorrections = $corrections
+                        $addedUsingNamespace = "using namespace $namespace"
+                        $suggestedCorrections.Add([CorrectionExtent]::new(
+                                $endLine,
+                                $endLine,
+                                1,
+                                $addedUsingNamespace.Length,
+                                $addedUsingNamespace,
+                                $extent.File,
+                                "Add '$addedUsingNamespace' reference"
+                            ))
+
+                        # $DiagnosticRecords += [DiagnosticRecord]@{
+                        #     Message              = "Long type name detected: consider 'using namespace $namespace' and shorten to [$className]"
+                        #     Extent               = $typeExpr.Extent
+                        #     RuleName             = 'PSAvoidLongTypeNames'
+                        #     Severity             = 'Information'
+                        #     SuggestedCorrections = $corrections
+                        # }
+                        $DiagnosticRecords.Add([DiagnosticRecord]::new(
+                                "Long type name detected: consider 'using namespace $namespace' and shorten to [$className]",
+                                $extent,
+                                'PSAvoidLongTypeNames',
+                                'Information',
+                                $suggestedCorrections
+                            ))
+                    }
+                    catch {
+                        $Err = $_
+                        throw "Exception $($Err.Exception.HResult) building DiagnosticRecord > $($Err.Exception.Message)"
+                    }
                 }
             }
         }
+        $DiagnosticRecords
     }
 }

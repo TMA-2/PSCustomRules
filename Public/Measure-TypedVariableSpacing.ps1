@@ -2,6 +2,8 @@
 
 using namespace System.Management.Automation
 using namespace System.Management.Automation.Language
+using namespace System.Collections.ObjectModel
+using namespace System.Collections.Generic
 using namespace Microsoft.Windows.PowerShell.ScriptAnalyzer
 using namespace Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic
 
@@ -22,49 +24,75 @@ function Measure-TypedVariableSpacing {
     .NOTES
     Used in conjunction with PSScriptAnalyzer.
     #>
-    [OutputType([DiagnosticRecord])]
+    [OutputType([List[DiagnosticRecord]])]
     [CmdletBinding()]
-    param(
+    param (
         [Parameter(Mandatory)]
         [ScriptBlockAst]
         $ScriptBlockAst
     )
 
-    $violations = $ScriptBlockAst.FindAll({
-            param($ast)
-            # Find parameter declarations and variable assignments with type constraints
-            ($ast -is [ParameterAst] -and $ast.StaticType) -or
-            ($ast -is [AssignmentStatementAst] -and
-            $ast.Left -is [ConvertExpressionAst])
-        }, $true)
+    process {
+        $DiagnosticRecords = [List[DiagnosticRecord]]::new()
 
-    foreach ($violation in $violations) {
-        $extent = $violation.Extent
-        $text = $extent.Text
+        try {
+            $violations = $ScriptBlockAst.FindAll({
+                    param($ast)
+                    # Find parameter declarations and variable assignments with type constraints
+                    ($ast -is [ParameterAst] -and $ast.StaticType) -or
+                    ($ast -is [AssignmentStatementAst] -and
+                    $ast.Left -is [ConvertExpressionAst])
+                }, $true)
+        }
+        catch {
+            $Err = $_
+            throw "Exception $($Err.Exception.HResult) parsing script AST > $($Err.Exception.Message)"
+        }
 
-        # Match type constraint without space: [string]$var
-        if ($text -match '(\[[^\]]+\])(\${?\w+)' -and $text -notmatch '(\[[^\]]+\])\s+(\${?\w+)') {
-            $correctedText = $text -replace '(?<type>\[[^\]]+\])(?<var>\$(?<bkt>{)?(?<scope>[a-z]+:)?[\w\(\)]+(?(bkt)}))', '${type} ${var}'
+        foreach ($violation in $violations) {
+            $extent = $violation.Extent
+            $text = $extent.Text
 
-            [string]$optionalDescription = 'Add space between type constraint and variable'
+            $suggestedCorrections = [Collection[CorrectionExtent]]::new()
 
-            $suggestedCorrection = [CorrectionExtent]::new(
-                $extent.StartLineNumber,
-                $extent.EndLineNumber,
-                $extent.StartColumnNumber,
-                $extent.EndColumnNumber,
-                $correctedText,
-                $extent.File,
-                $optionalDescription
-            )
+            # Match type constraint without space: [string]$var
+            if ($text -match '(\[[^\]]+\])(\${?\w+)' -and $text -notmatch '(\[[^\]]+\])\s+(\${?\w+)') {
+                $correctedText = $text -replace '(?<type>\[[^\]]+\])(?<var>\$(?<bkt>{)?(?<scope>[a-z]+:)?[\w\(\)]+(?(bkt)}))', '${type} ${var}'
 
-            [DiagnosticRecord]@{
-                Message              = 'Add space between type constraint and variable name'
-                Extent               = $extent
-                RuleName             = 'PSTypedVariableSpacing'
-                Severity             = 'Information'
-                SuggestedCorrections = @($suggestedCorrection)
+                [string]$optionalDescription = 'Add space between type constraint and variable'
+
+                try {
+                    $suggestedCorrections.Add([CorrectionExtent]::new(
+                            $extent.StartLineNumber,
+                            $extent.EndLineNumber,
+                            $extent.StartColumnNumber,
+                            $extent.EndColumnNumber,
+                            $correctedText,
+                            $extent.File,
+                            $optionalDescription
+                        ))
+
+                    # [DiagnosticRecord]@{
+                    #     Message              = 'Add space between type constraint and variable name'
+                    #     Extent               = $extent
+                    #     RuleName             = $PSCmdlet.MyInvocation.InvocationName
+                    #     Severity             = 'Information'
+                    #     SuggestedCorrections = $Corrections
+                    # }
+                    $DiagnosticRecords.Add([DiagnosticRecord]::new(
+                        'Add space between type constraint and variable name',
+                        $extent,
+                        'PSTypedVariableSpacing',
+                        'Information',
+                        $suggestedCorrections
+                    ))
+                }
+                catch {
+                    $Err = $_
+                    throw "Exception $($Err.Exception.HResult) building DiagnosticRecord > $($Err.Exception.Message)"
+                }
             }
         }
+        $DiagnosticRecords
     }
 }
