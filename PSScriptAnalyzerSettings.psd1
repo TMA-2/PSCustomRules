@@ -7,10 +7,7 @@
     )
 
     CustomRulePath = @(
-        # '.\PSCustomRules.psm1'
-        '.\Public\Measure-LongTypeNames.psm1'
-        '.\Public\Measure-NewObject.psm1'
-        '.\Public\Measure-TypedVariableSpacing.psm1'
+        'PSCustomRules.psm1'
     )
 
     # IncludeDefaultRules = $true

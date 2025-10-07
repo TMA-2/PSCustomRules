@@ -9,23 +9,28 @@ function Find-Token {
     This cmdlet contains a longer description, its purpose, common use cases, etc.
     #>
     [OutputType([Token[]])]
-    [CmdletBinding(DefaultParameterSetName='Script')]
+    [CmdletBinding(DefaultParameterSetName = 'Script')]
     param(
         [Parameter(
+            Position = 0,
             ValueFromPipelineByPropertyName,
-            ParameterSetName='Path'
-            )]
+            ParameterSetName = 'Path'
+        )]
         [string]
         $Path,
 
         [Parameter(
+            Position = 0,
             ValueFromPipeline,
-            ParameterSetName='Script'
-            )]
+            ParameterSetName = 'Script'
+        )]
         [string]
         $Script,
 
-        [Parameter()]
+        [Parameter(
+            Position = 1,
+            ValueFromPipeline
+        )]
         [TokenKind]
         $TokenKind
     )
@@ -37,12 +42,15 @@ function Find-Token {
     process {
         $Token = $null
         $Errors = $null
-        if($ParamSet -eq 'Path') {
-            [Parser]::ParseFile($Path, [ref]$Token, [ref]$Errors) | Out-Null
+        if ($ParamSet -eq 'Path') {
+            [void][Parser]::ParseFile($Path, [ref]$Token, [ref]$Errors)
         }
-        elseif($ParamSet -eq 'Script') {
-            [Parser]::ParseInput($Script, [ref]$Token, [ref]$Errors) | Out-Null
+        elseif ($ParamSet -eq 'Script') {
+            [void][Parser]::ParseInput($Script, [ref]$Token, [ref]$Errors)
         }
-        $Token | ? {$_.Kind -eq $TokenKind}
+        $Token | ? {
+            # return matching tokens
+            $_.Kind -eq $TokenKind
+        }
     }
 }
