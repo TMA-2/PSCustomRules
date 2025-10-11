@@ -7,11 +7,6 @@ using namespace System.Management.Automation
 using namespace System.Management.Automation.Language
 using namespace Microsoft.Windows.Powershell.ScriptAnalyzer.Generic
 
-# $testast = {New-Object 'System.IO.FileInfo' '.\.editorconfig'}
-# $SBResults.BoundParameters.TypeName
-#   Parameter = ParameterMetadata
-#   Name = Value = 'System.IO.FileInfo'
-
 # PSUseStaticConstructor
 function Measure-UseStaticConstructor {
     <#
@@ -45,17 +40,10 @@ function Measure-UseStaticConstructor {
     )
 
     begin {
-        # this should not match
-        $TestComObj = New-Object -ComObject Wscript.Shell
+        $DiagnosticRecords = [List[DiagnosticRecord]]::new()
     }
 
     process {
-        # this won't match yet as parameterized types aren't found
-        $DiagnosticRecords = New-Object List[DiagnosticRecord]
-        # this should match, though
-        $TestObject = New-Object -TypeName System.IO.DirectoryInfo -ArgumentList 'C:\windows'
-        $TestObject = $null
-
         # StaticParameterBinder helps us to find the TypeName argument
         # $spBinder = [StaticParameterBinder]
 
@@ -90,26 +78,41 @@ function Measure-UseStaticConstructor {
                 }
                 # get argument list parameter
                 if ($sbResults.BoundParameters.ContainsKey('ArgumentList')) {
-                    $ArgumentList = $sbResults.BoundParameters['ArgumentList'].Value.Extent.Text
+                    # this goes *way* deeper potentially than we need, but it works for now
+                    $ArgumentList = $sbResults.BoundParameters['ArgumentList'].Value.SubExpression.Extent.Text
                     $ArgumentType = $sbResults.BoundParameters['ArgumentList'].Value.StaticType
                 }
                 if ($TypeName) {
                     # Find full type name
-                    $FullType = [appdomain]::CurrentDomain.GetAssemblies().GetTypes().Where({ $_.IsPublic -and ($_.FullName -eq $TypeName -or $_.FullName -match "[\w.]+\.${TypeName}$" -or ($_.Name -eq $TypeName -and $_.Namespace -eq 'System')) })
+                    $FullType = Find-Type -TypeName $TypeName -Exact
+                    # $FullType = [appdomain]::CurrentDomain.GetAssemblies().GetTypes().Where({ $_.IsPublic -and ($_.FullName -eq $TypeName -or $_.FullName -match "[\w.]+\.${TypeName}$" -or ($_.Name -eq $TypeName -and $_.Namespace -eq 'System')) })
 
                     if (-not $FullType) {
                         Write-Verbose "Type $TypeName not found in loaded assemblies."
                         continue
                     }
 
-                    # Find constructors
-                    $TypeCtors = $FullType.GetConstructors()
-                    if ($TypeCtors.Count -eq 0) {
-                        Write-Verbose "No public constructors found for type $TypeName"
-                        return
+                    try {
+                        # Find constructors
+                        $TypeCtors = $FullType.GetConstructors()
+                        if ($TypeCtors.Count -eq 0) {
+                            Write-Verbose "No public constructors found for type $TypeName"
+                            return
+                        }
                     }
-                    else {
-                        $TypeCtors = $FullType::new.OverloadDefinitions
+                    catch {
+                        try {
+                            $TypeCtors = $FullType::new.OverloadDefinitions
+                        }
+                        catch {
+                            $Err = $_
+                            throw "Couldn't get static constructor for $TypeName > $($Err.Exception.Message)"
+                        }
+                    }
+
+                    if (-not $TypeCtors) {
+                        Write-Verbose "No constructors found for type $TypeName"
+                        return
                     }
 
                     if ($ArgumentList) {
@@ -136,11 +139,11 @@ function Measure-UseStaticConstructor {
                     # $suggestedCorrections.add($correctionExtent) | Out-Null
 
                     $result = [DiagnosticRecord]::new(
-                        'Use static New constructor instead of New-Object cmdlet to create objects.',
+                        'Use static constructor instead of New-Object cmdlet to create objects.',
                         $commandAst.Extent,
                         'PSUseStaticConstructor',
                         [DiagnosticSeverity]::Information,
-                        $null,
+                        $CommandAst.Extent.File,
                         'PSUseStaticConstructor',
                         $suggestedCorrections
                     )
@@ -153,7 +156,7 @@ function Measure-UseStaticConstructor {
                         $CommandAst.Extent,
                         'PSUseStaticConstructor',
                         [DiagnosticSeverity]::Information,
-                        $null
+                        $CommandAst.Extent.File
                     )
                 }
                 $DiagnosticRecords.Add($result)

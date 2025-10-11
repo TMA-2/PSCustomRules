@@ -3,15 +3,11 @@
 #Requires -Modules PSScriptAnalyzer
 
 # Get script files
-$PrivateScripts = @(gci "$PSScriptRoot\Private\*" -Include '*.ps1','*.psm1')
-$PublicScripts = @(gci "$PSScriptRoot\Public\*" -Include '*.ps1','*.psm1')
-
-$PrivateScripts | ? Name -eq 'Find-Token.ps1' | % {
-    . $_.FullName
-}
+$PrivateScripts = @(gci -Path "$PSScriptRoot\Private\*" -Include '*.ps1','*.psm1')
+$PublicScripts = @(gci -Path "$PSScriptRoot\Public\*" -Include '*.ps1','*.psm1')
 
 # Import all functions and modules
-$PublicScripts | % {
+$PrivateScripts + $PublicScripts | % {
     if ($_.Extension -eq '.ps1') {
         # dot-source regular scripts
         . $_.FullName
@@ -24,8 +20,10 @@ $PublicScripts | % {
 
 $Functions = @(
     'Measure-TypedVariableSpacing'
+    'Measure-CheckParamBlockParen'
     'Measure-AvoidLongTypeNames'
     'Measure-UseStaticConstructor'
+    'Measure-AvoidSimpleFunctions'
 )
 
 Export-ModuleMember -Function $Functions

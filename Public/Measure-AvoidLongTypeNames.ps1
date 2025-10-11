@@ -52,8 +52,8 @@ function Measure-AvoidLongTypeNames {
             return
         }
 
-        if ($Settings.MaxLength) {
-            $MaxTypeNameLength = $Settings.MaxLength
+        if ($Settings['MaxLength']) {
+            $MaxTypeNameLength = $Settings['MaxLength']
         }
 
         try {
@@ -67,9 +67,7 @@ function Measure-AvoidLongTypeNames {
         }
 
         [int]$endLine = 1
-        foreach ($RequiresStatement in $RequiresStatements) {
-            [int]$endLine = $RequiresStatement.Extent.EndLineNumber + 1
-        }
+        $endLine = $RequiresStatements.ForEach({$_.Extent.EndLineNumber + 1}) | Sort-Object -Descending | Select-Object -First 1
 
         # Alternate method
         # if($ScriptBlockAst.ScriptRequirements.IsElevationRequired) {$endLine++}
@@ -91,7 +89,12 @@ function Measure-AvoidLongTypeNames {
             throw "Exception $($Err.Exception.HResult) traversing 'using namespace' AST entries > $($Err.Exception.Message)"
         }
 
-        $existingNamespaces = $existingUsings | ForEach-Object { $_.Name.Value }
+        $existingNamespaces = $defaultNamespaces + $existingUsings.ForEach({ $_.Name.Value }) | select -Unique
+        $existingNamespaceLastLine = $existingUsings.ForEach({ $_.Extent.EndLineNumber }) | Sort | select -Last 1
+
+        if ($existingNamespaceLastLine) {
+            $endLine = [Math]::Max($endLine, $existingNamespaceLastLine + 1)
+        }
 
         try {
             # Find type expressions
@@ -110,41 +113,85 @@ function Measure-AvoidLongTypeNames {
         $classNameUsage = @{}
 
         foreach ($typeExpr in $typeExpressions) {
-            $typeName = $typeExpr.TypeName.FullName
+            $typeFullName = $typeExpr.TypeName.Name
+            $typeName = $typeExpr.TypeName.TypeName
+            $typeType = $typeExpr.TypeName.GetReflectionType()
+            $typeArgs = $typeExpr.TypeName.GenericArguments
+
             $suggestedCorrections = [Collection[CorrectionExtent]]::new()
 
-            if ($typeName.Length -gt $MaxTypeNameLength -and $typeName.Contains('.') -or ($typeName -match "^$defaultNamespaces\.\w+")) {
-                $lastDotIndex = $typeName.LastIndexOf('.')
-                $namespace = $typeName.Substring(0, $lastDotIndex)
-                $className = $typeName.Substring($lastDotIndex + 1)
+            if ($typeFullName.Length -gt $MaxTypeNameLength -and $typeFullName.Contains('.')) {
+                $namespace = $typeType.Namespace
+                $className = $typeType.Name
 
-                # Skip complex types and already imported namespaces
-                if (-not ($className.Contains('`') -or $className.Contains('+')) -and
-                    $namespace -notin $existingNamespaces) {
+                try {
+                    # Check for class name conflicts
+                    if ($classNameUsage.ContainsKey($className) -and
+                        $classNameUsage[$className] -ne $namespace) {
+                        continue # Skip if class name would conflict
+                    }
 
-                    try {
-                        # Check for class name conflicts
-                        if ($classNameUsage.ContainsKey($className) -and
-                            $classNameUsage[$className] -ne $namespace) {
-                            continue # Skip if class name would conflict
+                    $classNameUsage[$className] = $namespace
+
+                    $extent = $typeExpr.Extent
+                    $originalText = $extent.Text
+                    $classNameParams = ''
+                    if($typeArgs) {
+                        $classNameParams = '['
+                        $typeArgsCount = 1
+                        foreach($typeArg in $typeArgs) {
+                            # original = Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord
+                            # namespace = Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic
+                            # name = DiagnosticRecord
+                            # fullname = Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord
+                            $typeArgOriginal = $typeArg.Name
+                            $typeArgType = $typeArg.GetReflectionType()
+                            $typeArgNamespace = $typeArgType.Namespace
+                            $typeArgName = $typeArgType.Name
+                            $typeArgFullName = $typeArgType.FullName
+                            if ($typeArgName.Length -gt $typeArgOriginal.Length) {
+                                # if the usage is longer than the actual type name, add the namespace to references and use the short name
+                                if ($typeArgNamespace -notin $existingNamespaces -and $classNameUsage[$typeArgName] -ne $typeArgNamespace) {
+                                    $addedUsingNamespace = "using namespace $typeArgNamespace"
+                                    $suggestedCorrections.Add([CorrectionExtent]::new(
+                                            $endLine,
+                                            $endLine,
+                                            1,
+                                            $addedUsingNamespace.Length,
+                                            $addedUsingNamespace,
+                                            $extent.File,
+                                            "Add '$typeArgNamespace' type parameter reference"
+                                        ))
+                                    $existingNamespaces += $typeArgNamespace
+                                    $classNameUsage[$typeArgName] = $typeArgNamespace
+                                    # $endLine++
+                                }
+                            }
+                            # construct type param string
+                            if($typeArgsCount -lt $typeArgs.Count) {
+                                $classNameParams += "$typeArgName, "
+                            }
+                            else {
+                                $classNameParams += "$typeArgName]"
+                            }
+                            $typeArgsCount++
                         }
+                    }
 
-                        $classNameUsage[$className] = $namespace
+                    $correctedText = "$className$classNameParams"
+                    # $correctedText = $originalText -replace [regex]::Escape($typeName), $className
 
-                        $extent = $typeExpr.Extent
-                        $originalText = $extent.Text
-                        $correctedText = $originalText -replace [regex]::Escape($typeName), $className
+                    $suggestedCorrections.Add([CorrectionExtent]::new(
+                            $extent.StartLineNumber,
+                            $extent.EndLineNumber,
+                            $extent.StartColumnNumber,
+                            $extent.EndColumnNumber,
+                            $correctedText,
+                            $extent.File,
+                            "Shorten to $correctedText"
+                        ))
 
-                        $suggestedCorrections.Add([CorrectionExtent]::new(
-                                $extent.StartLineNumber,
-                                $extent.EndLineNumber,
-                                $extent.StartColumnNumber,
-                                $extent.EndColumnNumber,
-                                $correctedText,
-                                $extent.File,
-                                "Shorten to $className"
-                            ))
-
+                    if ($namespace -notin $existingNamespaces) {
                         $addedUsingNamespace = "using namespace $namespace"
                         $suggestedCorrections.Add([CorrectionExtent]::new(
                                 $endLine,
@@ -153,28 +200,23 @@ function Measure-AvoidLongTypeNames {
                                 $addedUsingNamespace.Length,
                                 $addedUsingNamespace,
                                 $extent.File,
-                                "Add '$addedUsingNamespace' reference"
+                                "Add '$namespace' type reference"
                             ))
+                    }
 
-                        # $DiagnosticRecords += [DiagnosticRecord]@{
-                        #     Message              = "Long type name detected: consider 'using namespace $namespace' and shorten to [$className]"
-                        #     Extent               = $typeExpr.Extent
-                        #     RuleName             = 'PSAvoidLongTypeNames'
-                        #     Severity             = 'Information'
-                        #     SuggestedCorrections = $corrections
-                        # }
-                        $DiagnosticRecords.Add([DiagnosticRecord]::new(
-                                "Long type name detected: consider 'using namespace $namespace' and shorten to [$className]",
-                                $extent,
-                                'PSAvoidLongTypeNames',
-                                'Information',
-                                $suggestedCorrections
-                            ))
-                    }
-                    catch {
-                        $Err = $_
-                        throw "Exception $($Err.Exception.HResult) building DiagnosticRecord > $($Err.Exception.Message)"
-                    }
+                    $DiagnosticRecords.Add([DiagnosticRecord]::new(
+                            "Long type name detected: consider 'using namespace $namespace' and shorten to [$className]",
+                            $extent,
+                            'PSAvoidLongTypeNames',
+                            [DiagnosticSeverity]::Information,
+                            $extent.File,
+                            'PSAvoidLongTypeNames',
+                            $suggestedCorrections
+                        ))
+                }
+                catch {
+                    $Err = $_
+                    throw "Exception $($Err.Exception.HResult) building DiagnosticRecord > $($Err.Exception.Message)"
                 }
             }
         }

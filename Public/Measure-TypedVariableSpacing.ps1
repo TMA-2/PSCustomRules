@@ -80,12 +80,14 @@ function Measure-TypedVariableSpacing {
                     #     SuggestedCorrections = $Corrections
                     # }
                     $DiagnosticRecords.Add([DiagnosticRecord]::new(
-                        'Add space between type constraint and variable name',
-                        $extent,
-                        'PSTypedVariableSpacing',
-                        'Information',
-                        $suggestedCorrections
-                    ))
+                            'Add space between type constraint and variable name',
+                            $extent,
+                            'PSTypedVariableSpacing',
+                            [DiagnosticSeverity]::Information,
+                            $extent.File,
+                            'PSTypedVariableSpacing',
+                            $suggestedCorrections
+                        ))
                 }
                 catch {
                     $Err = $_

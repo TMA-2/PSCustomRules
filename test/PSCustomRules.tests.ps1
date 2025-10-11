@@ -15,9 +15,11 @@ Describe 'PSCustomRules Module Tests' {
 
         It 'Should export the expected rules' {
             $ExportedCommands = Get-Command -Module PSCustomRules
-            $ExportedCommands.Name | Should -Contain 'Measure-LongTypeNames'
-            $ExportedCommands.Name | Should -Contain 'Measure-NewObject'
+            $ExportedCommands.Name | Should -Contain 'Measure-AvoidLongTypeNames'
+            $ExportedCommands.Name | Should -Contain 'Measure-UseStaticConstructor'
             $ExportedCommands.Name | Should -Contain 'Measure-TypedVariableSpacing'
+            $ExportedCommands.Name | Should -Contain 'Measure-AvoidSimpleFunctions'
+            $ExportedCommands.Name | Should -Contain 'Measure-CheckParamBlockParen'
         }
     }
 }
@@ -71,7 +73,7 @@ function Test-Function {
 
     Context 'Rule Metadata' {
         It 'Should have correct rule name' {
-            $Rule = Get-Command Measure-LongTypeNames
+            $Rule = Get-Command Measure-AvoidLongTypeNames
             $Rule | Should -Not -BeNullOrEmpty
         }
 
@@ -210,6 +212,217 @@ function Test-Function {
             $Results = Invoke-ScriptAnalyzer -ScriptDefinition $TestScript -CustomRulePath $ModulePath
             $Violation = $Results | Where-Object RuleName -EQ 'PSTypedVariableSpacing' | Select-Object -First 1
             $Violation.Severity | Should -BeIn @('Warning', 'Information')
+        }
+    }
+}
+
+Describe 'PSAvoidSimpleFunctions Rule Tests' {
+    Context 'Should detect simple functions' {
+        It 'Should detect simple function with inline parameters' {
+            $TestScript = @'
+function SimpleFunction([string]$Msg) {
+    Write-Output $Msg
+}
+'@
+            $Results = Invoke-ScriptAnalyzer -ScriptDefinition $TestScript -CustomRulePath $ModulePath
+            $Violations = $Results | Where-Object RuleName -EQ 'PSAvoidSimpleFunctions'
+            $Violations | Should -Not -BeNullOrEmpty
+        }
+
+        It 'Should detect simple function with multiple inline parameters' {
+            $TestScript = @'
+function SimpleFunctionWithAttr([Parameter(Mandatory,Position=0)][string]$Msg, [switch]$Flag, [ValidateRange(1,10)][int]$Count=1) {
+    if ($Flag) {
+        Write-Output "Count: ${Count}, Message: $Msg"
+    }
+    else {
+        Write-Output $Msg
+    }
+}
+'@
+            $Results = Invoke-ScriptAnalyzer -ScriptDefinition $TestScript -CustomRulePath $ModulePath
+            $Violations = $Results | Where-Object RuleName -EQ 'PSAvoidSimpleFunctions'
+            $Violations | Should -Not -BeNullOrEmpty
+        }
+
+        It 'Should detect nested simple functions inside advanced functions' {
+            $TestScript = @'
+function AdvFunction {
+    [CmdletBinding()]
+    param(
+        [string] $Msg
+    )
+
+    begin {
+        function local:logMsg([string]$Msg) {
+            Write-Host $Msg
+        }
+    }
+
+    process {
+        local:logMsg $Msg
+    }
+}
+'@
+            $Results = Invoke-ScriptAnalyzer -ScriptDefinition $TestScript -CustomRulePath $ModulePath
+            $Violations = $Results | Where-Object RuleName -EQ 'PSAvoidSimpleFunctions'
+            # Should detect the nested simple function
+            $Violations | Should -Not -BeNullOrEmpty
+        }
+    }
+
+    Context 'Should not trigger on advanced functions' {
+        It 'Should not flag filter functions' {
+            $TestScript = @'
+filter SimpleFilter {
+    Write-Output $_
+}
+'@
+            $Results = Invoke-ScriptAnalyzer -ScriptDefinition $TestScript -CustomRulePath $ModulePath
+            $Violations = $Results | Where-Object RuleName -EQ 'PSAvoidSimpleFunctions'
+            $Violations | Should -BeNullOrEmpty
+        }
+
+        It 'Should not flag functions with param blocks' {
+            $TestScript = @'
+function AdvFunction {
+    [CmdletBinding()]
+    param(
+        [string] $Msg
+    )
+
+    process {
+        Write-Output $Msg
+    }
+}
+'@
+            $Results = Invoke-ScriptAnalyzer -ScriptDefinition $TestScript -CustomRulePath $ModulePath
+            $Violations = $Results | Where-Object RuleName -EQ 'PSAvoidSimpleFunctions'
+            # Should only detect issues on the advanced function itself, not the param block
+            # (Advanced functions are allowed to have param blocks)
+            $AdvFunctionViolations = $Violations | Where-Object { $_.Extent.Text -match 'function AdvFunction' }
+            $AdvFunctionViolations | Should -BeNullOrEmpty
+        }
+
+        It 'Should not flag class methods' {
+            $TestScript = @'
+class DemoClass {
+    [string]$Message
+
+    DemoClass() {
+        $this.SetMessage("Default Message")
+    }
+
+    DemoClass([string]$Msg) {
+        $this.SetMessage($Msg)
+    }
+
+    [void] SetMessage([string]$Msg) {
+        $this.Message = $Msg
+    }
+
+    [void] WriteMessage() {
+        [console]::WriteLine($this.Message)
+    }
+}
+'@
+            $Results = Invoke-ScriptAnalyzer -ScriptDefinition $TestScript -CustomRulePath $ModulePath
+            $Violations = $Results | Where-Object RuleName -EQ 'PSAvoidSimpleFunctions'
+            # Class methods should not trigger this rule
+            $Violations | Should -BeNullOrEmpty
+        }
+    }
+
+    Context 'SuggestedCorrections' {
+        It 'Should provide correction to add param block' {
+            $TestScript = @'
+function SimpleFunction([string]$Msg) {
+    Write-Output $Msg
+}
+'@
+            $Results = Invoke-ScriptAnalyzer -ScriptDefinition $TestScript -CustomRulePath $ModulePath
+            $Violation = $Results | Where-Object RuleName -EQ 'PSAvoidSimpleFunctions' | Select-Object -First 1
+            $Violation.SuggestedCorrections | Should -Not -BeNullOrEmpty
+            $Violation.SuggestedCorrections[0].Description | Should -Match 'param'
+        }
+    }
+}
+
+Describe 'PSCheckParamBlockParen Rule Tests' {
+    Context 'Should detect spacing issues' {
+        It 'Should detect missing space after param keyword' {
+            $TestScript = @'
+function Test-Function {
+    param(
+        [string]$Parameter
+    )
+}
+'@
+            $Results = Invoke-ScriptAnalyzer -ScriptDefinition $TestScript -CustomRulePath $ModulePath
+            $Violations = $Results | Where-Object RuleName -EQ 'PSCheckParamBlockParen'
+            $Violations | Should -Not -BeNullOrEmpty
+        }
+
+        It 'Should detect extra spaces after param keyword' {
+            $TestScript = @'
+function Test-Function {
+    param  (
+        [string]$Parameter
+    )
+}
+'@
+            $Results = Invoke-ScriptAnalyzer -ScriptDefinition $TestScript -CustomRulePath $ModulePath
+            $Violations = $Results | Where-Object RuleName -EQ 'PSCheckParamBlockParen'
+            $Violations | Should -Not -BeNullOrEmpty
+        }
+    }
+
+    Context 'Should not trigger on correct spacing' {
+        It 'Should not flag correct param block spacing' {
+            $TestScript = @'
+function Test-Function {
+    param (
+        [string]$Parameter
+    )
+}
+'@
+            $Results = Invoke-ScriptAnalyzer -ScriptDefinition $TestScript -CustomRulePath $ModulePath
+            $Violations = $Results | Where-Object RuleName -EQ 'PSCheckParamBlockParen'
+            $Violations | Should -BeNullOrEmpty
+        }
+
+        It 'Should handle multiple parameters correctly' {
+            $TestScript = @'
+function Test-Function {
+    param (
+        [string]$Param1,
+
+        [int]$Param2,
+
+        [switch]$Param3
+    )
+}
+'@
+            $Results = Invoke-ScriptAnalyzer -ScriptDefinition $TestScript -CustomRulePath $ModulePath
+            $Violations = $Results | Where-Object RuleName -EQ 'PSCheckParamBlockParen'
+            $Violations | Should -BeNullOrEmpty
+        }
+    }
+
+    Context 'SuggestedCorrections' {
+        It 'Should provide correction for spacing' {
+            $TestScript = @'
+function Test-Function {
+    param(
+        [string]$Parameter
+    )
+}
+'@
+            $Results = Invoke-ScriptAnalyzer -ScriptDefinition $TestScript -CustomRulePath $ModulePath
+            $Violation = $Results | Where-Object RuleName -EQ 'PSCheckParamBlockParen' | Select-Object -First 1
+            if ($Violation) {
+                $Violation.SuggestedCorrections | Should -Not -BeNullOrEmpty
+            }
         }
     }
 }
