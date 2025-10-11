@@ -2,7 +2,9 @@
     # ref: https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/using-scriptanalyzer?view=ps-modules#custom-rules
     IncludeRules   = @(
         'PSTypedVariableSpacing'
+        'PSCheckParamBlockParen'
         'PSAvoidLongTypeNames'
+        'PSAvoidSimpleFunctions'
         'PSUseStaticConstructor'
     )
 
@@ -21,9 +23,18 @@
             Enable = $true
         }
 
+        PSCheckParamBlockParen = @{
+            Enable = $true
+        }
+
         PSAvoidLongTypeNames   = @{
             Enable    = $true
             MaxLength = 30
+        }
+
+        PSAvoidSimpleFunctions   = @{
+            Enable    = $true
+            AddHelp   = $false
         }
     }
 }

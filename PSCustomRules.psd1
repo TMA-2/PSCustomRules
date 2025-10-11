@@ -11,7 +11,7 @@
     RootModule           = 'PSCustomRules.psm1'
 
     # Version number of this module.
-    ModuleVersion        = '0.3.3'
+    ModuleVersion        = '0.5.5'
 
     # Supported PSEditions
     CompatiblePSEditions = 'Core', 'Desktop'
@@ -20,13 +20,13 @@
     GUID                 = '0220d2c6-ff75-4f83-bfd5-ebcfded85fcb'
 
     # Author of this module
-    Author               = 'Jon Dunham'
+    Author               = 'Jonathan Dunham'
 
     # Company or vendor of this module
-    CompanyName          = 'THR'
+    CompanyName          = 'Jonathan Dunham'
 
     # Copyright statement for this module
-    Copyright            = '(c) 2025 THR'
+    Copyright            = '(c) 2025 Jonathan Dunham'
 
     # Description of the functionality provided by this module
     Description          = 'Custom PSScriptAnalyzer rules'
@@ -69,7 +69,11 @@
 
     # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
     FunctionsToExport    = @(
-        'Measure-*'
+        'Measure-AvoidLongTypeNames'
+        'Measure-AvoidSimpleFunctions'
+        'Measure-CheckParamBlockParen'
+        'Measure-TypedVariableSpacing'
+        'Measure-UseStaticConstructor'
     )
 
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
