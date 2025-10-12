@@ -38,8 +38,13 @@ function Measure-CheckParamBlockParen {
         try {
             $violations = $ScriptBlockAst.FindAll({
                     param ($ast)
-                    # Find predicates with closed param blocks
-                    $ast -is [ParamBlockAst] -and $ast.Extent.Text -match 'param\('
+                    # Find param blocks without proper spacing: param( or param\n(
+                    # Exclude properly spaced: param (
+                    if ($ast -is [ParamBlockAst]) {
+                        $text = $ast.Extent.Text
+                        # Match param( directly OR param with non-space whitespace before (
+                        ($text -match '^param\(') -or ($text -match '^param[\r\n\t]')
+                    }
                 }, $true)
         }
         catch {
@@ -53,36 +58,63 @@ function Measure-CheckParamBlockParen {
 
             $suggestedCorrections = [Collection[CorrectionExtent]]::new()
 
-            # Match param block without space: param(
-            [string]$correctedText = $text -replace 'param\(', 'param ('
-            [string]$optionalDescription = 'Add space between param and opening parenthesis'
+            # Match param block without space: param( or param\n(
+            if ($text -match '^param(?<space>\s*)(?<paren>\()') {
+                $paramLength = 5  # "param"
+                $spaceLength = $Matches['space'].Length
+                $totalLength = $paramLength + $spaceLength + 1  # +1 for the (
 
-            try {
-                $suggestedCorrections.Add([CorrectionExtent]::new(
-                        $extent.StartLineNumber,
-                        $extent.StartLineNumber,
-                        $extent.StartColumnNumber,
-                        $extent.EndColumnNumber,
-                        $correctedText,
-                        $extent.File,
-                        $optionalDescription
-                    ))
+                # Calculate the end column
+                if ($spaceLength -eq 0) {
+                    # Same line: param(
+                    $EndLineNumber = $extent.StartLineNumber
+                    $EndColumn = $extent.StartColumnNumber + $totalLength
+                    $correctedText = 'param ('
+                }
+                else {
+                    # Newline case: param\n(
+                    $EndLineNumber = $extent.StartLineNumber + 1
+                    $EndColumn = 2  # Just past the opening paren
+                    $correctedText = 'param ('
+                }
 
-                $DiagnosticRecords.Add([DiagnosticRecord]::new(
-                        'Add space between param keyword and open parenthesis',
-                        $extent,
-                        'PSCheckParamBlockParen',
-                        [DiagnosticSeverity]::Information,
-                        $extent.File,
-                        'PSCheckParamBlockParen',
-                        $suggestedCorrections
-                    ))
-            }
-            catch {
-                $Err = $_
-                throw "Exception $($Err.Exception.HResult) building DiagnosticRecord > $($Err.Exception.Message)"
-            }
-        }
+                [string]$optionalDescription = 'Add space between param and opening parenthesis'
+
+                try {
+                    $suggestedCorrections.Add([CorrectionExtent]::new(
+                            $extent.StartLineNumber,
+                            $EndLineNumber,
+                            $extent.StartColumnNumber,
+                            $EndColumn,
+                            $correctedText,
+                            $extent.File,
+                            $optionalDescription
+                        ))
+
+                    # Create a custom extent that only highlights "param(" not the whole param block
+                    $diagnosticExtent = New-ScriptExtent -Extent $extent `
+                        -StartLineNumber $extent.StartLineNumber `
+                        -StartColumnNumber $extent.StartColumnNumber `
+                        -EndLineNumber $EndLineNumber `
+                        -EndColumnNumber $EndColumn `
+                        -Text $correctedText
+
+                    $DiagnosticRecords.Add([DiagnosticRecord]::new(
+                            'Add space between param keyword and open parenthesis',
+                            $diagnosticExtent,
+                            'PSCheckParamBlockParen',
+                            [DiagnosticSeverity]::Information,
+                            $extent.File,
+                            'PSCheckParamBlockParen',
+                            $suggestedCorrections
+                        ))
+                }
+                catch {
+                    $Err = $_
+                    throw "Exception $($Err.Exception.HResult) building DiagnosticRecord > $($Err.Exception.Message)"
+                } # try/catch correction/diagnostic
+            } # if match
+        } # foreach violation
         $DiagnosticRecords
-    }
-}
+    } # process block
+} # function
