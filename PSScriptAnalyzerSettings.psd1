@@ -15,18 +15,6 @@
     # IncludeDefaultRules = $true
 
     Rules          = @{
-        PSUseStaticConstructor = @{
-            Enable = $true
-        }
-
-        PSTypedVariableSpacing = @{
-            Enable = $true
-        }
-
-        PSCheckParamBlockParen = @{
-            Enable = $true
-        }
-
         PSAvoidLongTypeNames   = @{
             Enable    = $true
             MaxLength = 30

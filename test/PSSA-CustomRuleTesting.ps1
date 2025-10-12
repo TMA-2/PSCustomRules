@@ -124,6 +124,33 @@ class DemoClass {
 }
 #endregion PSAvoidSimpleFunctions testing
 
+#region PSCheckParamBlockParen testing
+# FIX: param block without space
+function Test-ParamNoSpace {
+    param(
+        [string]$Param1
+    )
+    Write-Output $Param1
+}
+
+# FIX: param block with newline instead of space (weird edge case)
+function Test-ParamNewLine {
+    param
+    (
+        [string]$Param1
+    )
+    Write-Output $Param1
+}
+
+# SKIP: param block with proper spacing
+function Test-ParamSpace {
+    param (
+        [string]$Param1
+    )
+    Write-Output $Param1
+}
+#endregion PSCheckParamBlockParen testing
+
 #region Keyword and Unary Operators
 # if, elseif
 if($true) {

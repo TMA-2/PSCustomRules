@@ -17,51 +17,62 @@ function New-ScriptExtent {
             ValueFromPipelineByPropertyName
         )]
         [string]
-        $Path,
+        $Path = $Extent.File,
 
         [Parameter(
             Position = 2,
             ValueFromPipelineByPropertyName
         )]
         [string]
-        $Text,
+        $Text = $Extent.Text,
 
         [Parameter(
             Position = 3,
+            HelpMessage = 'The start line number (1-based).',
             ValueFromPipelineByPropertyName
         )]
         [int]
-        $StartLineNumber,
+        $StartLineNumber = $Extent.StartLineNumber,
 
         [Parameter(
             Position = 4,
+            HelpMessage = 'The start column number (1-based).',
             ValueFromPipelineByPropertyName
         )]
         [int]
-        $EndLineNumber
+        $StartColumnNumber = $Extent.StartColumnNumber,
+
+        [Parameter(
+            Position = 5,
+            HelpMessage = 'The end line number (1-based).',
+            ValueFromPipelineByPropertyName
+        )]
+        [int]
+        $EndLineNumber = $Extent.EndLineNumber,
+
+        [Parameter(
+            Position = 6,
+            HelpMessage = 'The end column number (1-based).',
+            ValueFromPipelineByPropertyName
+        )]
+        [int]
+        $EndColumnNumber = $Extent.EndColumnNumber
     )
 
     process {
-        if (-not $Path) {
-            $Path = $Extent.File
-        }
-        if (-not $Text) {
-            $Text = $Extent.Text
-        }
-        if (-not $StartLineNumber) {
-            $StartLineNumber = $Extent.StartLineNumber
-        }
-        if (-not $EndLineNumber) {
-            $EndLineNumber = $Extent.EndLineNumber
-        }
+        # Get the actual line text from the extent
+        # For single line extents, just use the extent text
+        # For multi-line, get the first and last lines
+        $lines = $Text -split '\r?\n'
+        $startLineText = $lines[0]
+        $endLineText = $lines[-1]
 
-        # NOTE: subtract extent StartOffset from EndOffset to get ending offsetInLine
-        $startOffset = 1
-        $endOffset = $Extent.EndOffset - $Extent.StartOffset
+        # ScriptPosition constructor: (string scriptName, int scriptLineNumber, int offsetInLine, string line)
+        # offsetInLine is the column number (1-based)
+        # line is the text of that specific line
+        $startPosition = [ScriptPosition]::new($Path, $StartLineNumber, $StartColumnNumber, $startLineText)
+        $endPosition = [ScriptPosition]::new($Path, $EndLineNumber, $EndColumnNumber, $endLineText)
 
-        # file, scriptLineNumber, offsetInLine, line
-        $startPosition = [ScriptPosition]::new($Path, $StartLineNumber, $startOffset, $Text)
-        $endPosition = [ScriptPosition]::new($Path, $EndLineNumber, $endOffset, $Text)
         [ScriptExtent]::new($startPosition, $endPosition)
     }
 }

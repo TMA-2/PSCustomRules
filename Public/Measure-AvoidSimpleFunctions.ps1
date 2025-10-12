@@ -47,8 +47,20 @@ function Measure-AvoidSimpleFunctions {
         $CommentBasedHelp = ''
         $VERBOSE = $PSBoundParameters.ContainsKey('Verbose')
     }
+
     process {
         $DiagnosticRecords = [List[DiagnosticRecord]]::new()
+
+        if ($Settings -and -not $Settings['Enable']) {
+            Write-Verbose "Rule is disabled in settings."
+            return
+        }
+
+        $AddHelp = $false
+
+        if ($Settings -and $Settings.ContainsKey('AddHelp')) {
+            $AddHelp = $Settings['AddHelp']
+        }
 
         # Find the simple function definitions in the passed script block AST.
         $Violations = findEditorSimpleFunctions -ScriptBlockAst $ScriptBlockAst
@@ -61,16 +73,6 @@ function Measure-AvoidSimpleFunctions {
             return
         }
 
-        if ($Settings.ContainsKey('Enable') -and $Settings['Enable'] -eq $false) {
-            Write-Verbose "Rule is disabled in settings."
-            return
-        }
-
-        $AddHelp = $false
-
-        if ($Settings.ContainsKey('AddHelp')) {
-            $AddHelp = $Settings['AddHelp']
-        }
 
         foreach($Function in $Violations) {
             $suggestedCorrections = [Collection[CorrectionExtent]]::new()
