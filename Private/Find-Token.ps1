@@ -6,7 +6,13 @@ function Find-Token {
     .SYNOPSIS
     Finds tokens of a particular type in a string or script path.
     .DESCRIPTION
-    This cmdlet contains a longer description, its purpose, common use cases, etc.
+    This cmdlet returns an array of tokens of a particular type given a script path or text.
+    .PARAMETER Path
+    Path to a PowerShell script file to analyze.
+    .PARAMETER Script
+    The PowerShell script text to analyze.
+    .PARAMETER TokenKind
+    The kind of token to find (e.g., Keyword, Identifier, etc.).
     #>
     [OutputType([Token[]])]
     [CmdletBinding(DefaultParameterSetName = 'Script')]

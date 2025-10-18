@@ -39,7 +39,7 @@ function Measure-AvoidSimpleFunctions {
             ValueFromPipeline
         )]
         [hashtable]
-        $Settings = @{}
+        $Settings
     )
 
     begin {
@@ -88,19 +88,21 @@ function Measure-AvoidSimpleFunctions {
                 $Output = "function $FunctionName {`n"
             }
 
-            $FunctionExists = Get-Command $FunctionName -ErrorAction SilentlyContinue
-            if ($FunctionExists -and $AddHelp) {
-                $FunctionHelp = Get-Help $FunctionName -ErrorAction SilentlyContinue
-                $CommentBasedHelp += "<#`n.SYNOPSIS`n$($FunctionHelp.Synopsis)`n.DESCRIPTION`n"
-                if ($FunctionHelp.Description) {
-                    $CommentBasedHelp += "$($FunctionHelp.Description)`n"
+            if ($AddHelp) {
+                $FunctionExists = Get-Command $FunctionName -ea SilentlyContinue
+                if ($FunctionExists) {
+                    $FunctionHelp = Get-Help $FunctionName -ea SilentlyContinue
+                    $CommentBasedHelp += "<#`n.SYNOPSIS`n$($FunctionHelp.Synopsis)`n.DESCRIPTION`n"
+                    if ($FunctionHelp.Description) {
+                        $CommentBasedHelp += "$($FunctionHelp.Description)`n"
+                    }
+                    else {
+                        $CommentBasedHelp += "Function description`n"
+                    }
                 }
                 else {
-                    $CommentBasedHelp += "Function description`n"
+                    $CommentBasedHelp += "<#`n.SYNOPSIS`n$FunctionName`n.DESCRIPTION`n$FunctionName`n"
                 }
-            }
-            else {
-                $CommentBasedHelp += "<#`n.SYNOPSIS`n$FunctionName`n.DESCRIPTION`n$FunctionName`n"
             }
 
             $Output += "    [CmdletBinding()]`n"
@@ -116,25 +118,28 @@ function Measure-AvoidSimpleFunctions {
                 $AttribCount = 1
 
                 # Build CBH parameters
-                $CommentBasedHelp += ".PARAMETER $ParamName`n"
-                if ($FunctionExists -and $FunctionHelp -and $AddHelp) {
-                    $ParamHelpInfo = $FunctionHelp.parameters.parameter | Where-Object Name -eq $ParamName
-                    $ParamHelpType = $ParamHelpInfo.type.name
-                    $ParamHelpDesc = $ParamHelpInfo.description.text -join "`n"
-                    $ParamHelpMandatory = if ($ParamHelpInfo.required -eq 'true') {'(Mandatory) '}
-                    $ParamHelpDefault = $ParamHelpInfo.defaultValue
-                    if($ParamHelpDefault) {
-                        $CommentBasedHelp += "$ParamHelpMandatory$ParamHelpDesc`n[Type] Default value: [$ParamHelpType] $ParamHelpDefault`n"
+                if ($AddHelp) {
+                    $CommentBasedHelp += ".PARAMETER $ParamName`n"
+                    if ($FunctionExists -and $FunctionHelp) {
+                        $ParamHelpInfo = $FunctionHelp.parameters.parameter | Where-Object Name -eq $ParamName
+                        $ParamHelpType = $ParamHelpInfo.type.name
+                        $ParamHelpDesc = $ParamHelpInfo.description.text -join "`n"
+                        $ParamHelpMandatory = if ($ParamHelpInfo.required -eq 'true') {'(Mandatory) '}
+                        $ParamHelpDefault = $ParamHelpInfo.defaultValue
+                        if($ParamHelpDefault) {
+                            $CommentBasedHelp += "$ParamHelpMandatory$ParamHelpDesc`n[Type] Default value: [$ParamHelpType] $ParamHelpDefault`n"
+                        }
+                        else {
+                            $CommentBasedHelp += "$ParamHelpMandatory$ParamHelpDesc`nType: [$ParamHelpType]`n"
+                        }
                     }
-                    else {
-                        $CommentBasedHelp += "$ParamHelpMandatory$ParamHelpDesc`nType: [$ParamHelpType]`n"
+                    elseif ($FunctionExists) {
+                        $CommentBasedHelp += "Type: $ParamType."
+                        if ($ParamValue) {
+                            $CommentBasedHelp += " Default value: $ParamValue`n"
+                        }
                     }
-                }
-                elseif ($FunctionExists -and $AddHelp) {
-                    $CommentBasedHelp += "Type: $ParamType."
-                    if ($ParamValue) {
-                        $CommentBasedHelp += " Default value: $ParamValue`n"
-                    }
+                    $CommentBasedHelp += ".NOTES`nConverted automatically from simple function.`n#>`n"
                 }
 
                 #region Reconstruct parameter attributes
@@ -205,7 +210,6 @@ function Measure-AvoidSimpleFunctions {
             }
             #endregion Reconstruct parameters
 
-            $CommentBasedHelp += ".NOTES`nConverted automatically from simple function.`n#>`n"
             if ($AddHelp) {
                 $Output = $CommentBasedHelp + $Output
             }
@@ -221,13 +225,14 @@ function Measure-AvoidSimpleFunctions {
             # $endPosition = [ScriptPosition]::new($Function.BodyExtent.File, $Function.BodyExtent.StartLineNumber, $endOffsetInLine, $Function.BodyExtent.Text)
             # $RecordExtent = [ScriptExtent]::new($StartPosition, $endPosition)
             #>
-            $RecordExtent = New-ScriptExtent -Extent $Function.BodyExtent
 
             $ExtentStartLine = $Function.Extent.StartLineNumber
-            $ExtentStartColumn = $Function.Extent.StartColumnNumber
             $BodyStartLine = $Function.BodyExtent.StartLineNumber
+            $ExtentStartColumn = $Function.Extent.StartColumnNumber
             $BodyStartColumn = $Function.BodyExtent.StartColumnNumber + 1
             Write-Verbose "Converted simple function to advanced; from $($Function.OriginalText.Length) to $($Output.Length) chars"
+
+            $RecordExtent = New-ScriptExtent -Extent $Function.Extent -StartLineNumber $ExtentStartLine -EndLineNumber $BodyStartLine -StartColumn $ExtentStartColumn -EndColumn $BodyStartColumn
 
             $suggestedCorrections.Add([CorrectionExtent]::new(
                     $ExtentStartLine,

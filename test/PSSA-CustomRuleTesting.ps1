@@ -13,11 +13,13 @@ $OrderedDictionaryAlias = [OrderedDictionary]::new()
 $OrderedDictionaryFull = [System.Collections.Specialized.OrderedDictionary]::new()
 # FIX: type names that should be included
 # > 30 chars
-$ByteEqualityComparer = [System.Collections.Generic.ByteEqualityComparer]::new()
+$ByteEqualityComparer = [ByteEqualityComparer]::new()
 # > 30 chars, parameterized
 $OrderedDictionaryString = [System.Collections.Generic.OrderedDictionary[string, string]]::new()
 # > 30 chars, > 30 char parameterized
-$DiagnosticList = [System.Collections.Generic.List[Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord]]
+$DiagnosticList = [System.Collections.Generic.List[Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord]]::new()
+# > 30 chars, < 40 chars
+$GenericList = [System.Collections.Generic.KeyValuePair]::Create()
 #endregion PSAvoidLongTypeNames testing
 
 #region PSUseStaticConstructor testing
@@ -51,7 +53,7 @@ filter SimpleFilter {
 #     }
 # }
 # SECTION: simple function with inline attributes
-function SimpleFunctionWithAttr([Parameter(Mandatory,Position=0)][string]$Msg, [switch]$Flag, [ValidateRange(1,10)][int]$Count=1) {
+function private:SimpleFunctionWithAttr([Parameter(Mandatory,Position=0)][string]$Msg, [switch]$Flag, [ValidateRange(1,10)][int]$Count=1) {
     if ($Flag) {
         Write-Output "Count: $Count, Message: $Msg"
     }
@@ -128,7 +130,7 @@ class DemoClass {
 # FIX: param block without space
 function Test-ParamNoSpace {
     param(
-        [string]$Param1
+        [string]$Param1 = 'defaultvalue'
     )
     Write-Output $Param1
 }

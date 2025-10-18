@@ -38,7 +38,7 @@
 ### PSUseQuotedAssignmentKeys
 - [ ] Add rule for hashtables with corrections that surround key names with quotes.
 
-### PS...What?
+### PSAvoidConsecutiveEmptyLines
 - [ ] Add rule to remove duplicate newlines, i.e. `$FileText -replace '((?:\r?\n){2})([ \t]*(?:\r?\n))+', '$1'`
 
 ### PSEscapeInlineVariables
@@ -64,7 +64,7 @@
 
 ### Find-Token
 - [ ] Verify it works independently (Add Pester test)
-- [ ] Used w/ [Measure-AvoidLongTypeNames](#measure-avoidlongtypenames)
+- [x] Used w/ [Measure-AvoidLongTypeNames](#measure-avoidlongtypenames)
 
 ## Public
 
@@ -74,44 +74,50 @@
 - [x] Modify rule to exclude filters, workflows, and class ctors/methods
   - [x] Check that the Parent AST isn't a `FunctionMemberAst` or `TypeDefinitionAst`
   - [x] Check that the `IsFilter` and `IsWorkflow` properties are false
+- [x] Fix extent marking everything *but* the definition...
+- [ ] Get settings working
+  - [ ] Test `-AddHelp` setting
 - [ ] Respect indentation for inline functions
 - [x] Fix issue with overwriting function content
-- [ ] Fix *new* issue with inserting the advanced function prior to the existing definition, replacing 'f' in function...
+- [x] Fix *new* issue with inserting the advanced function prior to the existing definition, replacing 'f' in function...
 - [x] Fix issue with closing brace
-- [ ] Get settings working
-- [ ] Test `-AddHelp` setting
 
 ### Measure-CheckParamBlockParen
 - [x] Get rule working
 - [x] Get corrections working
-- [ ] Fix extent highlighting the full param block
+- [x] Fix extent highlighting the full param block
+- [x] Fix extent not highlighting `param\n    (`
+- [x] Fix correction on `param\n    (`: it inserts an extra paranthesis, e.g. `param (    (`
 
 ### Measure-TypedVariableSpacing
 - [x] Get rule working
 - [x] Get corrections working
 - [x] Add more error handling around AST traversal
+- [x] Fix extent to only highlight the type and variable
 - [ ] See if it can be added as a rule setting for [PSUseConsistentWhitespace](https://github.com/PowerShell/PSScriptAnalyzer/blob/main/Rules/UseConsistentWhitespace.cs)
   - [ ] Maybe `CheckTypedVariable`?
 
 ### Measure-AvoidLongTypeNames
 - [x] Get rule working
 - [x] Get corrections working
-- DEP: Possibly combine corrections, if possible? Probably not because they each have an extent
 - [ ] Get settings working
+- DEP: Possibly combine corrections, if possible? Probably not because they each have an extent
+- [x] Fix issue with class correction losing the square brackets
+- [x] Fix issue where new `using namespace` corrections insert text prior to `using namespace` blocks instead of after
+- [x] Fix issue with existing `using namespace` entries not being detected to prevent duplicate corrections
 - [x] Add more error handling around AST traversal
 - [ ] Test with parameterized types, e.g. `[System.Collections.Generic.List[string]]`
 - [ ] Test with long parameterized types, e.g. `[System.Collections.Generic.List[Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord]]`
 - [ ] Fix issue with multi-param types not correcting
   - [x] Check for `$ast.TypeName.GenericArguments` (`Language.TypeName`) and split into `TypeName.TypeName.Name` and `TypeName.GenericArguments.Name`
   - [x] Use `$ast.TypeName.GenericArguments.GetReflectionType()` for full `[type]`
-- [ ] Fix issue with single-param types correcting to the class & number of params: `List``1[DiagnosticRecord]`
-- [ ] Fix issue where new `using namespace` corrections insert text prior to `using namespace` blocks instead of after
-- [ ] Fix issue with existing `using namespace` entries not being detected to prevent duplicate corrections
+- [ ] Fix issue with parameterized types correcting to the class & number of params: `List``1[DiagnosticRecord]`
 
 ### Measure-UseStaticConstructor
 - [x] Get rule working
 - [x] Get corrections working
-- [x] If `-ArgumentList` is an array, correctly pass individual elements
+- [ ] If `-ArgumentList` is an array, correctly pass individual elements
+- [ ] Fix `-ArgumentList` not converting
 - [ ] Fix existing `using namespace` references with only one correction
 - [ ] Verify that the type has a `new()` constructor before identifying it as an issue
   - [ ] Use `Find-Constructor` function for this

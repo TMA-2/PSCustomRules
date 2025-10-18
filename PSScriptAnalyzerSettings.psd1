@@ -17,7 +17,7 @@
     Rules          = @{
         PSAvoidLongTypeNames   = @{
             Enable    = $true
-            MaxLength = 30
+            MaxLength = 40
         }
 
         PSAvoidSimpleFunctions   = @{
