@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.6] - 2025-10-17
+
+### Added
+- Enhanced Find-Token cmdlet documentation with additional parameters
+
+### Changed
+- Changed `Measure-TypedVariableSpacing` extent to only highlight the type and variable
+- Revised TODO.md for clarity on pending tasks and fixes
+- Minor `PSSA-CustomRuleTesting.ps1` changes
+
+### Fixed
+- Refined `Measure-AvoidLongTypeNames` logic for better handling of using statements
+- Improved `Measure-AvoidSimpleFunctions` to only build help info if AddHelp is specified
+- Fixed `Measure-CheckParamBlockParen` extent of param statements with a newline before the paranthesis
+
 ## [0.5.5] - 2025-10-10
 
 ### Added

@@ -67,19 +67,23 @@ function Measure-AvoidLongTypeNames {
         }
 
         [int]$endLine = 1
-        $endLine = $RequiresStatements.ForEach({$_.Extent.EndLineNumber + 1}) | Sort-Object -Descending | Select-Object -First 1
+
+        # if we have requires statements, set the target "using namespace" line to one after the last entry
+        if ($RequiresStatements) {
+            $endLine = $RequiresStatements.ForEach({$_.Extent.EndLineNumber + 1}) | Sort-Object | Select-Object -Last 1
+        }
 
         # Alternate method
         # if($ScriptBlockAst.ScriptRequirements.IsElevationRequired) {$endLine++}
+        # if($ScriptBlockAst.ScriptRequirements.RequiredPSVersion) {$endLine++}
         # if($ScriptBlockAst.ScriptRequirements.RequiredAssemblies) {$endLine++}
         # if($ScriptBlockAst.ScriptRequirements.RequiredModules) {$endLine++}
         # if($ScriptBlockAst.ScriptRequirements.RequiredPSEditions) {$endLine++}
-        # if($ScriptBlockAst.ScriptRequirements.RequiredPSVersion) {$endLine++}
 
+        # SECTION: Check for existing using statements
         try {
-            # Check for existing using statements
             $existingUsings = $ScriptBlockAst.FindAll({
-                    param($ast)
+                    param ($ast)
                     $ast -is [UsingStatementAst] -and
                     $ast.UsingStatementKind -eq 'Namespace'
                 }, $true)
@@ -89,8 +93,9 @@ function Measure-AvoidLongTypeNames {
             throw "Exception $($Err.Exception.HResult) traversing 'using namespace' AST entries > $($Err.Exception.Message)"
         }
 
-        $existingNamespaces = $defaultNamespaces + $existingUsings.ForEach({ $_.Name.Value }) | select -Unique
-        $existingNamespaceLastLine = $existingUsings.ForEach({ $_.Extent.EndLineNumber }) | Sort | select -Last 1
+        # THIS IS THE PROBLEM
+        $existingNamespaces = $defaultNamespaces + ($existingUsings | % { $_.Name.Value }) | select -Unique
+        $existingNamespaceLastLine = $existingUsings | % { $_.Extent.EndLineNumber } | Sort | select -Last 1
 
         if ($existingNamespaceLastLine) {
             $endLine = [Math]::Max($endLine, $existingNamespaceLastLine + 1)
@@ -99,7 +104,7 @@ function Measure-AvoidLongTypeNames {
         try {
             # Find type expressions
             $typeExpressions = $ScriptBlockAst.FindAll({
-                    param($ast)
+                    param ($ast)
                     $ast -is [TypeExpressionAst] -or
                     $ast -is [TypeConstraintAst]
                 }, $true)
@@ -116,6 +121,7 @@ function Measure-AvoidLongTypeNames {
             $typeFullName = $typeExpr.TypeName.Name
             $typeName = $typeExpr.TypeName.TypeName
             $typeType = $typeExpr.TypeName.GetReflectionType()
+            $typeNameShort = $typeName.Name.TrimStart($typeType.Namespace)
             $typeArgs = $typeExpr.TypeName.GenericArguments
 
             $suggestedCorrections = [Collection[CorrectionExtent]]::new()
@@ -127,11 +133,14 @@ function Measure-AvoidLongTypeNames {
                 try {
                     # Check for class name conflicts
                     if ($classNameUsage.ContainsKey($className) -and
-                        $classNameUsage[$className] -ne $namespace) {
+                        $classNameUsage[$className].Namespace -ne $namespace) {
                         continue # Skip if class name would conflict
                     }
 
-                    $classNameUsage[$className] = $namespace
+                    $classNameUsage[$className] = @{
+                        Classname = $typeNameShort
+                        Namespace = $namespace
+                    }
 
                     $extent = $typeExpr.Extent
                     $originalText = $extent.Text
@@ -140,6 +149,7 @@ function Measure-AvoidLongTypeNames {
                         $classNameParams = '['
                         $typeArgsCount = 1
                         foreach($typeArg in $typeArgs) {
+                            # SECTION: Using namespace param correction
                             # original = Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord
                             # namespace = Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic
                             # name = DiagnosticRecord
@@ -163,7 +173,7 @@ function Measure-AvoidLongTypeNames {
                                             "Add '$typeArgNamespace' type parameter reference"
                                         ))
                                     $existingNamespaces += $typeArgNamespace
-                                    $classNameUsage[$typeArgName] = $typeArgNamespace
+                                    $classNameUsage[$typeArgName].Namespace = $typeArgNamespace
                                     # $endLine++
                                 }
                             }
@@ -178,7 +188,8 @@ function Measure-AvoidLongTypeNames {
                         }
                     }
 
-                    $correctedText = "$className$classNameParams"
+                    # SECTION: Class name correction
+                    $correctedText = "[$className$classNameParams]"
                     # $correctedText = $originalText -replace [regex]::Escape($typeName), $className
 
                     $suggestedCorrections.Add([CorrectionExtent]::new(
@@ -191,8 +202,9 @@ function Measure-AvoidLongTypeNames {
                             "Shorten to $correctedText"
                         ))
 
+                    # SECTION: Using namespace correction
                     if ($namespace -notin $existingNamespaces) {
-                        $addedUsingNamespace = "using namespace $namespace"
+                        $addedUsingNamespace = "using namespace $namespace`n"
                         $suggestedCorrections.Add([CorrectionExtent]::new(
                                 $endLine,
                                 $endLine,
@@ -204,6 +216,7 @@ function Measure-AvoidLongTypeNames {
                             ))
                     }
 
+                    # SECTION: Diagnostic record
                     $DiagnosticRecords.Add([DiagnosticRecord]::new(
                             "Long type name detected: consider 'using namespace $namespace' and shorten to [$className]",
                             $extent,

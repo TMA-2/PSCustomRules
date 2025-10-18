@@ -63,19 +63,18 @@ function Measure-CheckParamBlockParen {
                 $paramLength = 5  # "param"
                 $spaceLength = $Matches['space'].Length
                 $totalLength = $paramLength + $spaceLength + 1  # +1 for the (
+                $correctedText = 'param ('
 
                 # Calculate the end column
                 if ($spaceLength -eq 0) {
                     # Same line: param(
                     $EndLineNumber = $extent.StartLineNumber
                     $EndColumn = $extent.StartColumnNumber + $totalLength
-                    $correctedText = 'param ('
                 }
                 else {
                     # Newline case: param\n(
                     $EndLineNumber = $extent.StartLineNumber + 1
-                    $EndColumn = 2  # Just past the opening paren
-                    $correctedText = 'param ('
+                    $EndColumn = $spaceLength  # Just past the opening paren
                 }
 
                 [string]$optionalDescription = 'Add space between param and opening parenthesis'
