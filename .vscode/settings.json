@@ -1,0 +1,23 @@
+{
+    // PSPlaceOpenBrace, PSPlaceCloseBrace
+  "powershell.codeFormatting.newLineAfterOpenBrace": true, // PSPlaceOpenBrace.NewLineAfter
+  "powershell.codeFormatting.openBraceOnSameLine": false, // PSPlaceOpenBrace.OnSameLine
+  "powershell.codeFormatting.ignoreOneLineBlock": true, // PSPlaceCloseBrace.IgnoreOneLineBlock, PSPlaceOpenBrace.IgnoreOneLineBlock
+  "powershell.codeFormatting.newLineAfterCloseBrace": true, // PSPlaceCloseBrace.NewLineAfter
+  // PSUseConsistentWhitespace
+  "powershell.codeFormatting.trimWhitespaceAroundPipe": true, // PSUseConsistentWhitespace.CheckPipeForRedundantWhitespace
+  "powershell.codeFormatting.whitespaceBetweenParameters": true, // PSUseConsistentWhitespace.CheckParameter
+  "powershell.codeFormatting.pipelineIndentationStyle": "IncreaseIndentationForFirstPipeline", // PSUseConsistentIndentation.PipelineIndentation
+  "powershell.codeFormatting.whitespaceInsideBrace": false, // PSUseConsistentWhitespace.CheckInnerBrace
+  "powershell.codeFormatting.addWhitespaceAroundPipe": true, // PSUseConsistentWhitespace.CheckPipe
+  "powershell.codeFormatting.whitespaceAfterSeparator": true, // PSUseConsistentWhitespace.CheckSeparator
+  "powershell.codeFormatting.whitespaceAroundOperator": true, // PSUseConsistentWhitespace.CheckOperator
+  "powershell.codeFormatting.whitespaceBeforeOpenBrace": true, // PSUseConsistentWhitespace.CheckOpenBrace
+  "powershell.codeFormatting.whitespaceBeforeOpenParen": true, // PSUseConsistentWhitespace.CheckOpenParen
+  // Misc.
+  "powershell.codeFormatting.useConstantStrings": true, // PSAvoidUsingDoubleQuotesForConstantString
+  "powershell.codeFormatting.useCorrectCasing": true, // PSUseCorrectCasing.CheckCommands
+  "powershell.codeFormatting.alignPropertyValuePairs": true, // PSAlignAssignmentStatement
+  "powershell.codeFormatting.autoCorrectAliases": false, // PSAvoidUsingCmdletAliases
+  "powershell.codeFormatting.avoidSemicolonsAsLineTerminators": false, // AvoidSemicolonsAsLineTerminators
+}
