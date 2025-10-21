@@ -125,7 +125,7 @@ function Measure-UseStaticConstructor {
                     $suggestedCorrections = [Collection[CorrectionExtent]]::new()
 
                     [string]$file = $MyInvocation.MyCommand.Definition
-                    [string]$optionalDescription = 'Replace New-Object with static New constructor'
+                    [string]$optionalDescription = "Replace 'New-Object $TypeName' with $correction"
                     $suggestedCorrections.Add([CorrectionExtent]::new(
                             $CommandAst.Extent.StartLineNumber,
                             $CommandAst.Extent.EndLineNumber,
@@ -139,7 +139,7 @@ function Measure-UseStaticConstructor {
                     # $suggestedCorrections.add($correctionExtent) | Out-Null
 
                     $result = [DiagnosticRecord]::new(
-                        'Use static constructor instead of New-Object cmdlet to create objects.',
+                        'Consider using static constructor instead of New-Object to instantiate classes.',
                         $commandAst.Extent,
                         'PSUseStaticConstructor',
                         [DiagnosticSeverity]::Information,
