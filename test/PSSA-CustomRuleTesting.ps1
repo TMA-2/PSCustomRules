@@ -31,6 +31,8 @@ $StringBuilder = New-Object System.Text.StringBuilder
 $StringBuilderArg = New-Object System.Text.StringBuilder -ArgumentList "Initial String"
 # Constructor with multiple typed arguments
 $StringBuilderArgs = New-Object System.Text.StringBuilder -ArgumentList @([string]"Initial String", [int]256)
+# Constructor with -Property hashtable
+$PSObject = New-Object System.Management.Automation.PSCustomObject -Property @{ Key1 = "Test"; Key2 = 123 }
 #endregion PSUseStaticConstructor testing
 
 #region PSAvoidSimpleFunctions testing

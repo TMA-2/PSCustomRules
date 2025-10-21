@@ -38,7 +38,9 @@ function Measure-AvoidLongTypeNames {
     )
 
     begin {
+        $RuleName = 'PSAvoidLongTypeNames'
         [int]$MaxTypeNameLength = 30
+        [int]$endLine = 1
         $defaultNamespaces = [string[]]@(
             'System'
             'System.Management.Automation'
@@ -48,11 +50,11 @@ function Measure-AvoidLongTypeNames {
     process {
         $DiagnosticRecords = [List[DiagnosticRecord]]::new()
 
-        if ($Settings -and -not $Settings['Enable']) {
+        if ($Settings -and -not $Settings.ContainsKey('Enable')) {
             return
         }
 
-        if ($Settings['MaxLength']) {
+        if ($Settings -and $Settings.ContainsKey('MaxLength')) {
             $MaxTypeNameLength = $Settings['MaxLength']
         }
 
@@ -65,8 +67,6 @@ function Measure-AvoidLongTypeNames {
             $Err = $_
             throw "Exception $($Err.Exception.HResult) finding comment tokens in scriptblock > $($Err.Exception.Message)"
         }
-
-        [int]$endLine = 1
 
         # if we have requires statements, set the target "using namespace" line to one after the last entry
         if ($RequiresStatements) {
@@ -93,13 +93,15 @@ function Measure-AvoidLongTypeNames {
             throw "Exception $($Err.Exception.HResult) traversing 'using namespace' AST entries > $($Err.Exception.Message)"
         }
 
-        # THIS IS THE PROBLEM
+        # FIXME: existingNamespaceLastLine is not getting updated properly
         $existingNamespaces = $defaultNamespaces + ($existingUsings | % { $_.Name.Value }) | select -Unique
-        $existingNamespaceLastLine = $existingUsings | % { $_.Extent.EndLineNumber } | Sort | select -Last 1
+        $existingNamespaceLastLine = $existingUsings | % { $_.Extent.EndLineNumber + 1 } | Sort | select -Last 1
 
         if ($existingNamespaceLastLine) {
-            $endLine = [Math]::Max($endLine, $existingNamespaceLastLine + 1)
+            $endLine = [Math]::Max($endLine, $existingNamespaceLastLine)
         }
+
+        Write-Verbose "${RuleName}: Found starting using namespace line at $endLine"
 
         try {
             # Find type expressions
@@ -121,116 +123,130 @@ function Measure-AvoidLongTypeNames {
             $typeFullName = $typeExpr.TypeName.Name
             $typeName = $typeExpr.TypeName.TypeName
             $typeType = $typeExpr.TypeName.GetReflectionType()
-            $typeNameShort = $typeName.Name.TrimStart($typeType.Namespace)
+            # this only exists for parameterized types
+            if ($typeName) {
+                $typeNameShort = $typeName.Name.TrimStart($typeType.Namespace)
+            }
+            else {
+                $typeNameShort = $typeType.Name
+            }
             $typeArgs = $typeExpr.TypeName.GenericArguments
 
             $suggestedCorrections = [Collection[CorrectionExtent]]::new()
 
-            if ($typeFullName.Length -gt $MaxTypeNameLength -and $typeFullName.Contains('.')) {
-                $namespace = $typeType.Namespace
-                $className = $typeType.Name
+            if ($typeFullName.Length -le $MaxTypeNameLength -or -not $typeFullName.Contains('.')) {
+                continue
+            }
 
-                try {
-                    # Check for class name conflicts
-                    if ($classNameUsage.ContainsKey($className) -and
-                        $classNameUsage[$className].Namespace -ne $namespace) {
-                        continue # Skip if class name would conflict
-                    }
+            $namespace = $typeType.Namespace
+            $className = $typeType.Name
 
-                    $classNameUsage[$className] = @{
-                        Classname = $typeNameShort
-                        Namespace = $namespace
-                    }
+            try {
+                # Check for class name conflicts
+                if ($classNameUsage.ContainsKey($className) -and
+                    $classNameUsage[$className].Namespace -ne $namespace) {
+                    continue # Skip if class name would conflict
+                }
 
-                    $extent = $typeExpr.Extent
-                    $originalText = $extent.Text
-                    $classNameParams = ''
-                    if($typeArgs) {
-                        $classNameParams = '['
-                        $typeArgsCount = 1
-                        foreach($typeArg in $typeArgs) {
-                            # SECTION: Using namespace param correction
-                            # original = Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord
-                            # namespace = Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic
-                            # name = DiagnosticRecord
-                            # fullname = Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord
-                            $typeArgOriginal = $typeArg.Name
-                            $typeArgType = $typeArg.GetReflectionType()
-                            $typeArgNamespace = $typeArgType.Namespace
-                            $typeArgName = $typeArgType.Name
-                            $typeArgFullName = $typeArgType.FullName
-                            if ($typeArgName.Length -gt $typeArgOriginal.Length) {
-                                # if the usage is longer than the actual type name, add the namespace to references and use the short name
-                                if ($typeArgNamespace -notin $existingNamespaces -and $classNameUsage[$typeArgName] -ne $typeArgNamespace) {
-                                    $addedUsingNamespace = "using namespace $typeArgNamespace"
-                                    $suggestedCorrections.Add([CorrectionExtent]::new(
-                                            $endLine,
-                                            $endLine,
-                                            1,
-                                            $addedUsingNamespace.Length,
-                                            $addedUsingNamespace,
-                                            $extent.File,
-                                            "Add '$typeArgNamespace' type parameter reference"
-                                        ))
-                                    $existingNamespaces += $typeArgNamespace
-                                    $classNameUsage[$typeArgName].Namespace = $typeArgNamespace
-                                    # $endLine++
-                                }
+                $classNameUsage[$className] = @{
+                    Classname = $typeNameShort
+                    Namespace = $namespace
+                }
+
+                $extent = $typeExpr.Extent
+                $originalText = $extent.Text
+                $classNameParams = ''
+                if($typeArgs) {
+                    $classNameParams = '['
+                    $typeArgsCount = 1
+                    # SECTION: Using namespace param correction
+                    foreach($typeArg in $typeArgs) {
+                        # original = Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord
+                        # namespace = Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic
+                        # name = DiagnosticRecord
+                        # fullname = Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord
+                        $typeArgOriginal = $typeArg.Name
+                        $typeArgType = $typeArg.GetReflectionType()
+                        $typeArgNamespace = $typeArgType.Namespace
+                        $typeArgName = $typeArgType.Name
+                        $typeArgFullName = $typeArgType.FullName
+                        if ($typeArgName.Length -lt $typeArgOriginal.Length) {
+                            # if the usage is longer than the actual type name, add the namespace to references and use the short name
+                            if ($typeArgNamespace -notin $existingNamespaces -and $classNameUsage[$typeArgName].Namespace -ne $typeArgNamespace) {
+                                $addedUsingNamespace = "using namespace $typeArgNamespace`n"
+                                $suggestedCorrections.Add([CorrectionExtent]::new(
+                                        $endLine,
+                                        $endLine,
+                                        1,
+                                        $addedUsingNamespace.Length,
+                                        $addedUsingNamespace,
+                                        $extent.File,
+                                        "Add '$typeArgNamespace' type parameter reference"
+                                    ))
+                                $existingNamespaces += $typeArgNamespace
+                                $classNameUsage[$typeArgName].Classname = $typeArgName
+                                $classNameUsage[$typeArgName].Namespace = $typeArgNamespace
+                                # $endLine++
+                                Write-Verbose "${RuleName}: Added correction 'using namespace $typeArgNamespace' for type parameter $typeArgName at $endLine"
                             }
-                            # construct type param string
-                            if($typeArgsCount -lt $typeArgs.Count) {
-                                $classNameParams += "$typeArgName, "
-                            }
-                            else {
-                                $classNameParams += "$typeArgName]"
-                            }
-                            $typeArgsCount++
                         }
+                        # construct type param string
+                        if($typeArgsCount -lt $typeArgs.Count) {
+                            $classNameParams += "$typeArgName, "
+                        }
+                        else {
+                            $classNameParams += "$typeArgName]"
+                        }
+                        $typeArgsCount++
                     }
+                }
 
-                    # SECTION: Class name correction
-                    $correctedText = "[$className$classNameParams]"
-                    # $correctedText = $originalText -replace [regex]::Escape($typeName), $className
-
+                # SECTION: Using namespace correction
+                if ($namespace -notin $existingNamespaces) {
+                    $addedUsingNamespace = "using namespace $namespace`n"
                     $suggestedCorrections.Add([CorrectionExtent]::new(
-                            $extent.StartLineNumber,
-                            $extent.EndLineNumber,
-                            $extent.StartColumnNumber,
-                            $extent.EndColumnNumber,
-                            $correctedText,
+                            $endLine,
+                            $endLine,
+                            1,
+                            $addedUsingNamespace.Length,
+                            $addedUsingNamespace,
                             $extent.File,
-                            "Shorten to $correctedText"
+                            "Add '$namespace' type reference"
                         ))
-
-                    # SECTION: Using namespace correction
-                    if ($namespace -notin $existingNamespaces) {
-                        $addedUsingNamespace = "using namespace $namespace`n"
-                        $suggestedCorrections.Add([CorrectionExtent]::new(
-                                $endLine,
-                                $endLine,
-                                1,
-                                $addedUsingNamespace.Length,
-                                $addedUsingNamespace,
-                                $extent.File,
-                                "Add '$namespace' type reference"
-                            ))
-                    }
-
-                    # SECTION: Diagnostic record
-                    $DiagnosticRecords.Add([DiagnosticRecord]::new(
-                            "Long type name detected: consider 'using namespace $namespace' and shorten to [$className]",
-                            $extent,
-                            'PSAvoidLongTypeNames',
-                            [DiagnosticSeverity]::Information,
-                            $extent.File,
-                            'PSAvoidLongTypeNames',
-                            $suggestedCorrections
-                        ))
+                    Write-Verbose "${RuleName}: Added correction 'using namespace $namespace' at $endLine"
                 }
-                catch {
-                    $Err = $_
-                    throw "Exception $($Err.Exception.HResult) building DiagnosticRecord > $($Err.Exception.Message)"
-                }
+
+                # SECTION: Class name correction
+                $correctedText = "[$($classNameUsage[$className].Classname)$classNameParams]"
+                # $correctedText = $originalText -replace [regex]::Escape($typeName), $className
+                $correctedLengthDifference = $correctedText.Length - $originalText.Length
+
+                $suggestedCorrections.Add([CorrectionExtent]::new(
+                        $extent.StartLineNumber,
+                        $extent.EndLineNumber,
+                        $extent.StartColumnNumber,
+                        $extent.EndColumnNumber,
+                        $correctedText,
+                        $extent.File,
+                        "Shorten to $correctedText for a difference of $correctedLengthDifference chars"
+                    ))
+
+                Write-Verbose "${RuleName}: Added correction '$correctedText` at line $($extent.StartLineNumber)"
+
+                # SECTION: Diagnostic record
+                $DiagnosticRecords.Add([DiagnosticRecord]::new(
+                        "Long type name detected: consider shortening to $correctedText",
+                        $extent,
+                        'PSAvoidLongTypeNames',
+                        [DiagnosticSeverity]::Information,
+                        $extent.File,
+                        'PSAvoidLongTypeNames',
+                        $suggestedCorrections
+                    ))
+            }
+            catch {
+                $Err = $_
+                throw "Exception $($Err.Exception.HResult) building DiagnosticRecord > $($Err.Exception.Message)"
             }
         }
         $DiagnosticRecords
