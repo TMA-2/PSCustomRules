@@ -11,15 +11,18 @@ $ArrayList = [System.Collections.ArrayList]::new()
 $OrderedDictionaryAlias = [OrderedDictionary]::new()
 # > 30 chars, already referenced
 $OrderedDictionaryFull = [System.Collections.Specialized.OrderedDictionary]::new()
-# FIX: type names that should be included
+
+# Type names that should be included
 # > 30 chars
 $ByteEqualityComparer = [ByteEqualityComparer]::new()
-# > 30 chars, parameterized
-$OrderedDictionaryString = [System.Collections.Generic.OrderedDictionary[string, string]]::new()
-# > 30 chars, > 30 char parameterized
-$DiagnosticList = [System.Collections.Generic.List[Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord]]::new()
 # > 30 chars, < 40 chars
 $GenericList = [System.Collections.Generic.KeyValuePair]::Create()
+# Parameterized type (short)
+$OrderedDictionaryString = [System.Collections.Generic.OrderedDictionary[string, string]]::new()
+# Parameterized type (long)
+$DiagnosticList = [System.Collections.Generic.List[Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord]]::new()
+# Double-parameterized type name
+$DoubleParamType = [System.Collections.Generic.Dictionary[string, System.Collections.Generic.List[object]]]::new()
 #endregion PSAvoidLongTypeNames testing
 
 #region PSUseStaticConstructor testing
@@ -34,6 +37,27 @@ $StringBuilderArgs = New-Object System.Text.StringBuilder -ArgumentList @([strin
 # Constructor with -Property hashtable
 $PSObject = New-Object System.Management.Automation.PSCustomObject -Property @{ Key1 = "Test"; Key2 = 123 }
 #endregion PSUseStaticConstructor testing
+
+#region PSAlignEnumStatement testing
+Enum TestEnum {
+    Unknown = -1
+    Boot = 0
+    System = 1
+    Auto = 2
+    Automatic = 2
+    Manual = 3
+    Disabled = 4
+}
+
+[FlagsAttribute()]
+Enum TestEnumBitwise {
+    ValueZero = 0x00
+    ValueOne
+    ValueTwo
+    ValueEight = 0x08
+    ValueSixteen = 0x10
+}
+#endregion PSAlignEnumStatement testing
 
 #region PSAvoidSimpleFunctions testing
 # SECTION: simple function

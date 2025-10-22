@@ -1,10 +1,11 @@
 @{
     # ref: https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/using-scriptanalyzer?view=ps-modules#custom-rules
     IncludeRules   = @(
-        'PSTypedVariableSpacing'
-        'PSCheckParamBlockParen'
+        'PSAlignEnumStatement'
         'PSAvoidLongTypeNames'
         'PSAvoidSimpleFunctions'
+        'PSCheckParamBlockParen'
+        'PSTypedVariableSpacing'
         'PSUseStaticConstructor'
     )
 
@@ -20,9 +21,9 @@
             MaxLength = 40
         }
 
-        PSAvoidSimpleFunctions   = @{
-            Enable    = $true
-            AddHelp   = $false
+        PSAvoidSimpleFunctions = @{
+            Enable  = $true
+            AddHelp = $false
         }
     }
 }

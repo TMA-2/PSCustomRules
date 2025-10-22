@@ -9,6 +9,9 @@
 - Refer to [Obsidian PSSA issue list](obsidian://open?vault=Obsidian&file=Development%2FGithub%20Issues%2FPSScriptAnalyzer%20Issue)
 - Refer to [PSSA Repo][PSSARepo]
 
+### PSAlignEnumStatement
+- [x] Write function - target `TypeDefinitionAst`
+
 ### PSCheckParamBlockParem
 - [x] Add rule to insert a space between param and opening parenthesis
 - [ ] Open issue with [PSSA Repo][PSSAIssues] to include as part of **PSUseConsistentWhitespace**
@@ -16,7 +19,7 @@
 ### PSAvoidSimpleFunctions
 - [x] Add rule to convert simple functions to advanced -- using the existing conversion functions in VSCodeProfile
 
-### PSCheckKeywordSpacing
+### PSUseConsistentWhitespaceEx
 - [ ] Add rule to insert a space around keywords not currently working with PSSA
 - [ ] param (expand from `Measure-CheckParamBlockParen`)
 - [ ] separate until and while from braces and parentheses

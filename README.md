@@ -4,6 +4,9 @@ This is an attempt to create custom PSScriptAnalyzer rules, both custom and as s
 
 ## Rules
 
+### PSAlignEnumStatement
+Since PSAlignAssignmentStatement doens't include enums... here we are.
+
 ### PSAvoidLongTypeNames
 Looks for .NET type names longer than 30 characters, although that's meant to be configurable (see below).
 Attempts to offer a fix that inserts a `using namespace` reference at the top of the script, and converts the type to only the class name.
