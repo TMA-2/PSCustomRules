@@ -23,6 +23,8 @@ $OrderedDictionaryString = [System.Collections.Generic.OrderedDictionary[string,
 $DiagnosticList = [System.Collections.Generic.List[Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord]]::new()
 # Double-parameterized type name
 $DoubleParamType = [System.Collections.Generic.Dictionary[string, System.Collections.Generic.List[object]]]::new()
+# Assembly-qualified type name
+$AssemblyQualifiedType = [Microsoft.PowerShell.PSConsoleReadLineOptions, Microsoft.PowerShell]::new()
 #endregion PSAvoidLongTypeNames testing
 
 #region PSUseStaticConstructor testing
@@ -73,11 +75,11 @@ filter SimpleFilter {
 #     Write-Output "In Workflow"
 # }
 # SECTION DSC function
-# configuration DSCFunction {
-#     Node localhost {
-#         Write-Output "In DSC"
-#     }
-# }
+configuration DSCFunction {
+    Node localhost {
+        Write-Output "In DSC"
+    }
+}
 # SECTION: simple function with inline attributes
 function private:SimpleFunctionWithAttr([Parameter(Mandatory,Position=0)][string]$Msg, [switch]$Flag, [ValidateRange(1,10)][int]$Count=1) {
     if ($Flag) {

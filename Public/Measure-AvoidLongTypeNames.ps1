@@ -93,6 +93,13 @@ function Measure-AvoidLongTypeNames {
             throw "Exception $($Err.Exception.HResult) traversing 'using namespace' AST entries > $($Err.Exception.Message)"
         }
 
+        $lineOneExtent = $ScriptBlockAst.Find({
+                param ($ast)
+                $ast -is [ScriptExtent] -and
+                $ast.StartLineNumber -eq 1 -and
+                $ast.EndLineNumber -eq 1
+            }, $true)
+
         # FIXME: existingNamespaceLastLine is not getting updated properly
         $existingNamespaces = $defaultNamespaces + ($existingUsings | % { $_.Name.Value }) | select -Unique
         $existingNamespaceLastLine = $existingUsings | % { $_.Extent.EndLineNumber + 1 } | Sort | select -Last 1
@@ -123,6 +130,7 @@ function Measure-AvoidLongTypeNames {
             $typeFullName = $typeExpr.TypeName.Name
             $typeName = $typeExpr.TypeName.TypeName
             $typeType = $typeExpr.TypeName.GetReflectionType()
+            $assemblyType = $typeExpr.TypeName.AssemblyName
             # this only exists for parameterized types
             if ($typeName) {
                 $typeNameShort = $typeName.Name.TrimStart($typeType.Namespace)
@@ -156,11 +164,11 @@ function Measure-AvoidLongTypeNames {
                 $extent = $typeExpr.Extent
                 $originalText = $extent.Text
                 $classNameParams = ''
-                if($typeArgs) {
+                if ($typeArgs) {
                     $classNameParams = '['
                     $typeArgsCount = 1
                     # SECTION: Using namespace param correction
-                    foreach($typeArg in $typeArgs) {
+                    foreach ($typeArg in $typeArgs) {
                         # original = Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord
                         # namespace = Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic
                         # name = DiagnosticRecord
@@ -204,11 +212,17 @@ function Measure-AvoidLongTypeNames {
                 # SECTION: Using namespace correction
                 if ($namespace -notin $existingNamespaces) {
                     $addedUsingNamespace = "using namespace $namespace`n"
+                    if ($endLine -eq 1) {
+                        $endCol = 1
+                    }
+                    else {
+                        $endCol = $addedUsingNamespace.Length
+                    }
                     $suggestedCorrections.Add([CorrectionExtent]::new(
                             $endLine,
                             $endLine,
                             1,
-                            $addedUsingNamespace.Length,
+                            $endCol,
                             $addedUsingNamespace,
                             $extent.File,
                             "Add '$namespace' type reference"
@@ -217,9 +231,19 @@ function Measure-AvoidLongTypeNames {
                 }
 
                 # SECTION: Class name correction
-                $correctedText = "[$($classNameUsage[$className].Classname)$classNameParams]"
+                if ($assemblyType) {
+                    $correctedText = "[$($classNameUsage[$className].Classname)$classNameParams, $AssemblyType]"
+                }
+                else {
+                    $correctedText = "[$($classNameUsage[$className].Classname)$classNameParams]"
+                }
                 # $correctedText = $originalText -replace [regex]::Escape($typeName), $className
-                $correctedLengthDifference = $correctedText.Length - $originalText.Length
+                if ($addedUsingNamespace) {
+                    $correctedLengthDifference = $correctedText.Length - $originalText.Length + $addedUsingNamespace.Length
+                }
+                else {
+                    $correctedLengthDifference = $correctedText.Length - $originalText.Length
+                }
 
                 $suggestedCorrections.Add([CorrectionExtent]::new(
                         $extent.StartLineNumber,

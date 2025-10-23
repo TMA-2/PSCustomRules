@@ -10,7 +10,7 @@
     )
 
     CustomRulePath = @(
-        'PSCustomRules.psm1'
+        '.\'
     )
 
     # IncludeDefaultRules = $true

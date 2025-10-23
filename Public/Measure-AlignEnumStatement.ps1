@@ -48,22 +48,29 @@ function Measure-AlignEnumStatement {
                 - If the final text != original text, create DiagnosticRecord with suggested correction
                     - Set extent to the equal sign like PSAlignAssignmentStatement
                 #>
+                # [string]$file = $MyInvocation.MyCommand.Definition
 
                 $suggestedCorrections = [Collection[CorrectionExtent]]::new()
-                # [string]$file = $MyInvocation.MyCommand.Definition
+                $correctedLines = @()
+
+                $initialIndent = ' ' * ($Violation.Extent.StartColumnNumber - 1)
+
+                $attributes = $Violation.Attributes
+                if ($attributes) {
+                    Write-Verbose "Enum has attributes; preserving in correction."
+                    # $correctedLines += $attribute.Extent.Text
+                }
+
+                $correctedLines += "{0}enum {1} {{" -f $initialIndent, $Violation.Name
 
                 $EnumMembers = $Violation.Members
                 $MaxNameLength = $EnumMembers | ForEach-Object { $_.Name.Length } | Sort-Object | Select-Object -Last 1
-
-                $correctedLines = @()
-                $initialIndent = ' ' * ($Violation.Extent.StartColumnNumber - 1)
-                $correctedLines += "{0}enum {1} {{" -f $initialIndent, $Violation.Name
 
                 foreach ($member in $EnumMembers) {
                     $indent = ' ' * ($member.Extent.StartColumnNumber - 1)
                     $name = $member.Name
                     if ($null -ne $member.InitialValue) {
-                        $value = $member.InitialValue.Value
+                        $value = $member.InitialValue.Extent.Text
 
                         $spaces = ' ' * ($MaxNameLength - $name.Length)
 
@@ -72,7 +79,7 @@ function Measure-AlignEnumStatement {
                     }
                     else {
                         # No initial value; just use the name
-                        $correctedLines += "$indent$name"
+                        $correctedLines += '{0}{1}' -f $indent, $name
                     }
                 }
 
@@ -84,28 +91,35 @@ function Measure-AlignEnumStatement {
                     continue
                 }
 
-                $ExtentSplat = @{
-                    Extent        = $Violation.Extent
-                    EndLineNumber = $Violation.Extent.StartLineNumber
-                    EndColumn     = $Violation.Extent.StartColumnNumber + $correctedLines[0].Length
+                $StartLine = $Violation.Extent.StartLineNumber
+                if ($attributes) {
+                    $StartLine += $attributes.Count
                 }
+
+                $ExtentSplat = @{
+                    Extent          = $Violation.Extent
+                    StartLineNumber = $StartLine
+                    EndLineNumber   = $StartLine
+                    EndColumn       = $Violation.Extent.StartColumnNumber + $correctedLines[0].Length
+                }
+
                 $diagnosticExtent = New-ScriptExtent @ExtentSplat
 
                 $suggestedCorrections.Add([CorrectionExtent]::new(
-                        $Violation.Extent.StartLineNumber,
+                        $StartLine,
                         $Violation.Extent.EndLineNumber,
                         $Violation.Extent.StartColumnNumber,
                         $Violation.Extent.EndColumnNumber,
                         $correctedLinesJoined,
                         $Violation.Extent.File,
-                        'Assignment statements are not aligned.'
+                        'Assignment statements in enum are not aligned.'
                     ))
 
                 $DiagnosticRecords.Add([DiagnosticRecord]::new(
                         'Assignment statements in enum definitions should be aligned for better readability.',
                         $diagnosticExtent,
                         'PSAlignEnumStatement',
-                        [DiagnosticSeverity]::Warning,
+                        [DiagnosticSeverity]::Information,
                         $Violation.Extent.File,
                         'PSAlignEnumStatement',
                         $suggestedCorrections

@@ -79,6 +79,7 @@ function Measure-AvoidSimpleFunctions {
 
             $FunctionName = $Function.Name
             $FunctionScope = $Function.Scope
+            $Indent = ' ' * ($Function.Extent.StartColumnNumber - 1)
 
             # Construct function definition
             if ($FunctionScope) {
@@ -105,8 +106,8 @@ function Measure-AvoidSimpleFunctions {
                 }
             }
 
-            $Output += "    [CmdletBinding()]`n"
-            $Output += "    param (`n"
+            $Output += "$Indent    [CmdletBinding()]`n"
+            $Output += "$Indent    param (`n"
 
             $ParamCount = 1
 
@@ -145,7 +146,7 @@ function Measure-AvoidSimpleFunctions {
                 #region Reconstruct parameter attributes
                 Write-Verbose "Processing parameter $ParamName with $($Param.Attributes.Count) attributes..."
                 foreach ($Attr in $Param.Attributes) {
-                    $Output += "        [$($Attr.Name)(`n"
+                    $Output += "$Indent        [$($Attr.Name)(`n"
                     $CombinedArgs = [string[]]@()
                     $ArgsCount = 1
 
@@ -163,7 +164,7 @@ function Measure-AvoidSimpleFunctions {
 
                         if ($AttribName) {
                             # Write-Verbose ">> Processing attribute argument $AttribName with value $AttribArgs"
-                            $Output += "            $AttribName"
+                            $Output += "$Indent           $AttribName"
                             if ($AttribArgs) {
                                 # Arguments with Parameter and Value
                                 $Output += " = $AttribArgs$Ending"
@@ -183,21 +184,21 @@ function Measure-AvoidSimpleFunctions {
                     if ($CombinedArgs.Count -gt 0) {
                         $JoinedArgs = $CombinedArgs -join ', '
                         Write-Verbose ">> Appending attribute values $JoinedArgs"
-                        $Output += "            $JoinedArgs`n"
+                        $Output += "$Indent            $JoinedArgs`n"
                     }
-                    $Output += "        )]`n"
+                    $Output += "$Indent        )]`n"
                     $AttribCount++
                 }
                 #endregion Reconstruct parameter attributes
 
-                $Output += "        $ParamType`n"
+                $Output += "$Indent        $ParamType`n"
                 if ($null -ne $ParamValue) {
                     # Add parameter default value
-                    $Output += "        `$$ParamName = $ParamValue"
+                    $Output += "$Indent        `$$ParamName = $ParamValue"
                 }
                 else {
                     # Parameter only
-                    $Output += "        `$$ParamName"
+                    $Output += "$Indent        `$$ParamName"
                 }
                 if ($ParamCount -lt $Function.Parameters.Count) {
                     # Add empty line between parameters
@@ -214,7 +215,7 @@ function Measure-AvoidSimpleFunctions {
                 $Output = $CommentBasedHelp + $Output
             }
 
-            $Output += "    )`n"
+            $Output += "$Indent    )`n"
 
             # subtract function extent StartOffset from EndOffset to get ending offsetInLine
             # Create: [ScriptExtent]::new(<ScriptPosition> startPosition, <ScriptPosition> endPosition)
