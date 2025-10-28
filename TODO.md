@@ -9,24 +9,8 @@
 - Refer to [Obsidian PSSA issue list](obsidian://open?vault=Obsidian&file=Development%2FGithub%20Issues%2FPSScriptAnalyzer%20Issue)
 - Refer to [PSSA Repo][PSSARepo]
 
-### PSCheckParamBlockParem
-- [x] Add rule to insert a space between param and opening parenthesis
-- [ ] Open issue with [PSSA Repo][PSSAIssues] to include as part of **PSUseConsistentWhitespace**
-
-### PSAvoidSimpleFunctions
-- [x] Add rule to convert simple functions to advanced -- using the existing conversion functions in VSCodeProfile
-
-### PSCheckKeywordSpacing
-- [ ] Add rule to insert a space around keywords not currently working with PSSA
-- [ ] param (expand from `Measure-CheckParamBlockParen`)
-- [ ] separate until and while from braces and parentheses
-- [ ] Open issue with [PSSA Repo][PSSAIssues] to modify PSPlace
-- DEP: simple function definition, e.g. `function MyFunc($param1)` to `function MyFunc ($param1)`
-- DEP: class constructor, e.g. `MyClass() {}` to `MyClass () {}`
-- DEP: class method definition, e.g. `[void] MyMethod() {}` to `[void] MyMethod () {}`
-
 ### PSUseConsistentWhitespace.CheckOperator
-- [ ] Add rule to separate unary operators: [PSSA Issue](https://github.com/PowerShell/PSScriptAnalyzer/issues/2095)
+- [ ] Add rule to separate unary operators: [PSSA Issue][PSSAUnaryIssue]
 - [ ] Current rule misses unary operators, e.g. `-not$true`, `-bnot1`, `-join$MyVar`
 
 ### PSAvoidUnnecessarySubexpression
@@ -68,10 +52,26 @@
 
 ## Public
 
+### PSAlignEnumStatement
+- [x] Write function - target `TypeDefinitionAst`
+- [ ] Handle inline comments properly
+- [x] Fix hex/binary values converting to decimal
+- [x] Fix correction for FlagAttribute enums
+  - [x] Extent highlights the attribute instead of the enum definition
+  - [x] Correction removes the attribute
+  - NOTE: AttributeAst are actually children of TypeDefinitionAst ($ast.Attributes)
+
 ### Measure-AvoidLongTypeNames
 - [x] Get rule working
 - [x] Get corrections working
 - [ ] Get settings working
+- [ ] Fix issue with using corrections overwriting line 1 when there are no `#requires` or `using` statements
+  - [ ] Get the text for line 1 somehow and prepend it to the correction text?
+  - [ ] Try using `Join-ScriptExtent` maybe?
+- [ ] Fix issue with using corrections overwriting line 1 even with `#requires` and `using` statements
+  - [ ] The correction is returning the correct extent line, so...?
+  - [x] Prepend newline when the extent is line 1 (no `#requires` or `using` statements)
+- [x] Handle assembly-qualified types: `[TypeName, Namespace]` by checking `$ast.TypeName.AssemblyName`
 - [ ] Add separate `using namespace` corrections to long parameterized types, e.g. `[System.Collections.Generic.List[Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord]]`
   - [ ] option 1: Keep it as a separate correction
   - [ ] option 2: Iterate over `$ast.TypeName.GenericArguments` to add a multi-line correction along with the main type
@@ -88,11 +88,15 @@
 - DEP: Possibly combine corrections, if possible? Probably not because they each have an extent
 
 ### Measure-AvoidSimpleFunctions
+> Note: Simple function attribute arguments are in FunctionDefinitionAst.Parameters.Attributes.Arguments
+> Note: Advanced function attribute arguments are in FunctionDefinitionAst.Body.ParamBlock.Attributes, in PositionalArguments and NamedArguments
+- [x] Add rule to convert simple functions to advanced
 - [x] Get rule working
 - [x] Get corrections working
 - [ ] Get settings working
   - [ ] Test `-AddHelp` setting
-- [ ] Respect indentation for inline functions
+- [ ] Use rule in `VSCodeProfile\Convert-EditorFunction` instead of duplicating work
+- [x] Respect indentation for inline functions
 - [x] Modify rule to exclude filters, workflows, and class ctors/methods
   - [x] Check that the Parent AST isn't a `FunctionMemberAst` or `TypeDefinitionAst`
   - [x] Check that the `IsFilter` and `IsWorkflow` properties are false
@@ -103,22 +107,32 @@
 
 ### Measure-UseConsistentWhitespaceEx
 - [ ] Build out and test
+- [ ] Add rule to insert a space around keywords not currently working with PSSA
+- [x] [Open issue with PSSA Repo][PSSAUnaryIssue]
 - [ ] Catch keywords and operators that PSSA misses:
-  - [ ] -not, -bnot
-  - [ ] -join (when preceding)
-  - [ ] until - `}until(` both brace and paren (PSUseConsistentWhitespace.CheckOpenBrace & CheckOpenParen)
-  - [ ] while - `}while (` just paren, (PSUseConsistentWhitespace.CheckOpenBrace)
-  - [ ] param
+  - [ ] `-not`, `-bnot`, `-join` (UnaryExpressionAst)
+  - [ ] `}until(` for both brace and parens (DoUntilStatementAst)
+    - [ ] See: PSUseConsistentWhitespace.CheckOpenBrace & CheckOpenParen
+  - [ ] `}while (` for parens (WhileStatementAst, DoWhileStatementAst)
+    - [ ] See: PSUseConsistentWhitespace.CheckOpenBrace
+  - [ ] `param()` (ParamBlockAst)
+    - [ ] Merge from `Measure-CheckParamBlockParen`
   - [ ] (maybe) class constructor and method `[void] MyMethod($string) {}`
   - [ ] (maybe) inline function definition `function MyFunc($string) {}`
-- [ ] Merge CheckParamBlockParen with this when done
+- DEP: simple function definition, e.g. `function MyFunc($param1)` to `function MyFunc ($param1)`
+- DEP: class constructor, e.g. `MyClass() {}` to `MyClass () {}`
+- DEP: class method definition, e.g. `[void] MyMethod() {}` to `[void] MyMethod () {}`
+
+### PSUseConsistentWhitespaceEx
 
 ### Measure-CheckParamBlockParen
+- [x] Add rule to insert a space between param and opening parenthesis
 - [x] Get rule working
 - [x] Get corrections working
 - [x] Fix extent highlighting the full param block
 - [x] Fix extent not highlighting `param\n    (`
 - [x] Fix correction on `param\n    (`: it inserts an extra paranthesis, e.g. `param (    (`
+- [ ] Open issue with [PSSA Repo][PSSAIssues] to include as part of **PSUseConsistentWhitespace**
 
 ### Measure-TypedVariableSpacing
 - [x] Get rule working
@@ -141,3 +155,4 @@
 <!-- References -->
 [PSSARepo]: https://github.com/PowerShell/PSScriptAnalyzer
 [PSSAIssues]: https://github.com/PowerShell/PSScriptAnalyzer/issues
+[PSSAUnaryIssue]: https://github.com/PowerShell/PSScriptAnalyzer/issues/2095

@@ -9,20 +9,23 @@ using namespace Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic
 function Measure-AvoidSimpleFunctions {
     <#
     .SYNOPSIS
-    Measure-AvoidSimpleFunctions looks for simple function in a given script block, and returns diagnostic records with advanced function corrections.
+        Measure-AvoidSimpleFunctions looks for simple function in a given script block, and returns diagnostic records with advanced function corrections.
     .DESCRIPTION
-    This function identifies a simple PowerShell function definition from a script block, extracts its parameters and attributes, and reconstructs it as an advanced function. The converted function is then provided as a suggested correction in a diagnostic record.
+        This function identifies a simple PowerShell function definition from a script block, extracts its parameters and attributes, and reconstructs it as an advanced function. The converted function is then provided as a suggested correction in a diagnostic record.
     .PARAMETER ScriptBlockAst
-    The script block AST to analyze.
-    This parameter is automatically provided by PSScriptAnalyzer.
+        The script block AST to analyze.
+        This parameter is automatically provided by PSScriptAnalyzer.
     .PARAMETER Settings
-    If specified, contains one setting: AddHelp, which attempts to add comment-based help prior to the converted function. If the function already exists in the session, it will try to extract existing help content. Otherwise, it will attempt to create basic help content based on parameter names and types.
+        If specified, contains one setting (besides Enable): AddHelp, which attempts to add comment-based help to the converted function.
+        If the function already exists in the session, it will try to extract existing help content.
+        Otherwise, it will attempt to scaffold basic help content based on parameter names and types.
     .EXAMPLE
-    Measure-AvoidSimpleFunctions -ScriptBlockAst $scriptBlockAst -Settings @{ AddHelp = $true }
+        Measure-AvoidSimpleFunctions -ScriptBlockAst $scriptBlockAst -Settings @{ AddHelp = $true }
 
-    If simple functions are passed in the scriptblock, DiagnosticRecords are returned with suggested corrections to convert them to advanced functions, including comment-based help if enabled in settings.
+        If simple functions are passed in the scriptblock, DiagnosticRecords are returned with suggested corrections to convert them to advanced functions, including comment-based help if enabled in settings.
     .NOTES
-    Meant to be used with PSScriptAnalyzer.
+        This rule is intended for use with the PSScriptAnalyzer module, and while it will surface diagnostic
+        records and corrections if passed in valid ASTs, it is not designed to be run directly by end users.
     #>
     [OutputType([List[DiagnosticRecord]])]
     [CmdletBinding()]
@@ -79,6 +82,7 @@ function Measure-AvoidSimpleFunctions {
 
             $FunctionName = $Function.Name
             $FunctionScope = $Function.Scope
+            $Indent = ' ' * ($Function.Extent.StartColumnNumber - 1)
 
             # Construct function definition
             if ($FunctionScope) {
@@ -105,8 +109,8 @@ function Measure-AvoidSimpleFunctions {
                 }
             }
 
-            $Output += "    [CmdletBinding()]`n"
-            $Output += "    param (`n"
+            $Output += "$Indent    [CmdletBinding()]`n"
+            $Output += "$Indent    param (`n"
 
             $ParamCount = 1
 
@@ -145,7 +149,7 @@ function Measure-AvoidSimpleFunctions {
                 #region Reconstruct parameter attributes
                 Write-Verbose "Processing parameter $ParamName with $($Param.Attributes.Count) attributes..."
                 foreach ($Attr in $Param.Attributes) {
-                    $Output += "        [$($Attr.Name)(`n"
+                    $Output += "$Indent        [$($Attr.Name)(`n"
                     $CombinedArgs = [string[]]@()
                     $ArgsCount = 1
 
@@ -163,7 +167,7 @@ function Measure-AvoidSimpleFunctions {
 
                         if ($AttribName) {
                             # Write-Verbose ">> Processing attribute argument $AttribName with value $AttribArgs"
-                            $Output += "            $AttribName"
+                            $Output += "$Indent           $AttribName"
                             if ($AttribArgs) {
                                 # Arguments with Parameter and Value
                                 $Output += " = $AttribArgs$Ending"
@@ -183,21 +187,21 @@ function Measure-AvoidSimpleFunctions {
                     if ($CombinedArgs.Count -gt 0) {
                         $JoinedArgs = $CombinedArgs -join ', '
                         Write-Verbose ">> Appending attribute values $JoinedArgs"
-                        $Output += "            $JoinedArgs`n"
+                        $Output += "$Indent            $JoinedArgs`n"
                     }
-                    $Output += "        )]`n"
+                    $Output += "$Indent        )]`n"
                     $AttribCount++
                 }
                 #endregion Reconstruct parameter attributes
 
-                $Output += "        $ParamType`n"
+                $Output += "$Indent        $ParamType`n"
                 if ($null -ne $ParamValue) {
                     # Add parameter default value
-                    $Output += "        `$$ParamName = $ParamValue"
+                    $Output += "$Indent        `$$ParamName = $ParamValue"
                 }
                 else {
                     # Parameter only
-                    $Output += "        `$$ParamName"
+                    $Output += "$Indent        `$$ParamName"
                 }
                 if ($ParamCount -lt $Function.Parameters.Count) {
                     # Add empty line between parameters
@@ -214,7 +218,7 @@ function Measure-AvoidSimpleFunctions {
                 $Output = $CommentBasedHelp + $Output
             }
 
-            $Output += "    )`n"
+            $Output += "$Indent    )`n"
 
             # subtract function extent StartOffset from EndOffset to get ending offsetInLine
             # Create: [ScriptExtent]::new(<ScriptPosition> startPosition, <ScriptPosition> endPosition)

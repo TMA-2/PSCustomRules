@@ -5,8 +5,8 @@ using namespace Microsoft.Windows.Powershell.ScriptAnalyzer.Generic
 using namespace System.Collections.ObjectModel
 using namespace System.Collections.Generic
 
-# PSCheckKeywordSpacing
-function Measure-CheckKeywordSpacing {
+# PSUseConsistentWhitespaceEx
+function Measure-UseConsistentWhitespaceEx {
     [CmdletBinding()]
     [OutputType([List[DiagnosticRecord]])]
     param (
@@ -31,7 +31,8 @@ function Measure-CheckKeywordSpacing {
                     $ast -is [WhileStatementAst] -or
                     $ast -is [DoUntilStatementAst] -or
                     $ast -is [DoWhileStatementAst] -or
-                    $ast -is [UnaryExpressionAst]
+                    ($ast -is [UnaryExpressionAst] -and $ast.TokenKind -in @('Not', 'Bnot', 'Join')) -or
+                    $ast -is [ParamBlockAst]
                 }, $true)
         }
         catch {
@@ -42,7 +43,9 @@ function Measure-CheckKeywordSpacing {
         try {
             foreach ($Violation in $Violations) {
                 <# Parsing logic
-                - look for UnaryExpression: -not, -bnot (maybe -join but I think that's covered)
+                - look for UnaryExpression
+                    - TokenKind = Not, Bnot, Join
+                - look for param() blocks
                 - look for WhileStatement: while(){}
                 - look for DoWhileStatement: do{}while()
                 - look for DoUntilStatement: do{}until()

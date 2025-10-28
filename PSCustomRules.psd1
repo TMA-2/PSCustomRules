@@ -11,7 +11,7 @@
     RootModule           = 'PSCustomRules.psm1'
 
     # Version number of this module.
-    ModuleVersion        = '0.5.7'
+    ModuleVersion        = '0.6.8'
 
     # Supported PSEditions
     CompatiblePSEditions = 'Core', 'Desktop'
@@ -23,13 +23,13 @@
     Author               = 'Jonathan Dunham'
 
     # Company or vendor of this module
-    CompanyName          = 'Jonathan Dunham'
+    CompanyName          = 'TMA-2'
 
     # Copyright statement for this module
-    Copyright            = '(c) 2025 Jonathan Dunham'
+    Copyright            = '(c) 2025 TMA-2'
 
     # Description of the functionality provided by this module
-    Description          = 'Custom PSScriptAnalyzer rules'
+    Description          = 'Custom PSScriptAnalyzer rules I find useful, or to make up for issues with the default PSSA formatting.'
 
     # Minimum version of the PowerShell engine required by this module
     PowerShellVersion    = '5.1'
@@ -50,7 +50,12 @@
     # ProcessorArchitecture = 'Amd64'
 
     # Modules that must be imported into the global environment prior to importing this module
-    RequiredModules      = @('PSScriptAnalyzer')
+    RequiredModules      = @(
+        @{
+            ModuleName = 'PSScriptAnalyzer'
+            ModuleVersion = '1.24.0'
+        }
+    )
 
     # Assemblies that must be loaded prior to importing this module
     # RequiredAssemblies = @()
@@ -69,6 +74,7 @@
 
     # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
     FunctionsToExport    = @(
+        'Measure-AlignEnumStatement'
         'Measure-AvoidLongTypeNames'
         'Measure-AvoidSimpleFunctions'
         'Measure-CheckParamBlockParen'
@@ -101,10 +107,10 @@
             Tags         = @('PSScriptAnalyzer', 'Rules', 'CodeQuality', 'Formatting')
 
             # A URL to the license for this module.
-            # LicenseUri = ''
+            LicenseUri   = 'https://github.com/TMA-2/PSCustomRules/blob/main/LICENSE'
 
             # A URL to the main website for this project.
-            # ProjectUri = ''
+            ProjectUri   = 'https://github.com/TMA-2/PSCustomRules'
 
             # A URL to an icon representing this module.
             # IconUri = ''
