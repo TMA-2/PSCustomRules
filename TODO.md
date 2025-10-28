@@ -9,6 +9,11 @@
 - Refer to [Obsidian PSSA issue list](obsidian://open?vault=Obsidian&file=Development%2FGithub%20Issues%2FPSScriptAnalyzer%20Issue)
 - Refer to [PSSA Repo][PSSARepo]
 
+### PSUseConsistentWhitespace.SeparateParams
+- [ ] Add rule to separate parameters in param blocks with two newlines
+- [ ] Modify `findEditorSimpleFunctions` private function to optionally find advanced functions in order to reconstruct param blocks.
+  - [ ] Optionally create a new private function to look for `ParamBlockAst` and builds them out similar to the above. Then, use it in `findEditorSimpleFunctions` to avoid code duplication.
+
 ### PSUseConsistentWhitespace.CheckOperator
 - [ ] Add rule to separate unary operators: [PSSA Issue][PSSAUnaryIssue]
 - [ ] Current rule misses unary operators, e.g. `-not$true`, `-bnot1`, `-join$MyVar`
@@ -54,7 +59,8 @@
 
 ### PSAlignEnumStatement
 - [x] Write function - target `TypeDefinitionAst`
-- [ ] Handle inline comments properly
+- [ ] Handle comments properly
+  - Refer to updated [AlignAssignmentStatement](https://github.com/liamjpeters/PSScriptAnalyzer/blob/AlignAssignmentStatementV2/Rules/AlignAssignmentStatement.cs#L424-L539)
 - [x] Fix hex/binary values converting to decimal
 - [x] Fix correction for FlagAttribute enums
   - [x] Extent highlights the attribute instead of the enum definition
@@ -62,19 +68,22 @@
   - NOTE: AttributeAst are actually children of TypeDefinitionAst ($ast.Attributes)
 
 ### Measure-AvoidLongTypeNames
+- [ ] Use `Join-ScriptExtent` to join Requires and Using extents?
+
+#### DiagnosticRecord
 - [x] Get rule working
-- [x] Get corrections working
 - [ ] Get settings working
-- [ ] Fix issue with using corrections overwriting line 1 when there are no `#requires` or `using` statements
-  - [ ] Get the text for line 1 somehow and prepend it to the correction text?
-  - [ ] Try using `Join-ScriptExtent` maybe?
-- [ ] Fix issue with using corrections overwriting line 1 even with `#requires` and `using` statements
-  - [ ] The correction is returning the correct extent line, so...?
-  - [x] Prepend newline when the extent is line 1 (no `#requires` or `using` statements)
-- [x] Handle assembly-qualified types: `[TypeName, Namespace]` by checking `$ast.TypeName.AssemblyName`
+
+#### CorrectionExtent
+- [x] Get corrections working
+- [ ] Fix issue with using corrections inserting at line 1 even though Measure-AvoidLongTypeNames clearly surfaces a SuggestedCorrection with the correct extent...
 - [ ] Add separate `using namespace` corrections to long parameterized types, e.g. `[System.Collections.Generic.List[Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord]]`
   - [ ] option 1: Keep it as a separate correction
   - [ ] option 2: Iterate over `$ast.TypeName.GenericArguments` to add a multi-line correction along with the main type
+- [x] Fix issue with using corrections overwriting line 1 with or without `#requires` or `using` statements
+  - [x] Insert with a prepended newline and start/end column 1
+  - [x] Verify the function's correction is returning the correct extent
+- [x] Handle assembly-qualified types: `[TypeName, Namespace]` by checking `$ast.TypeName.AssemblyName`
 - [x] Fix issue with `using namespace` correction extents inserting in the middle of existing entries:
 - [x] Fix issue with parameterized types correcting to the class & number of params: `List``1[DiagnosticRecord]`
 - [x] Test with parameterized types, e.g. `[System.Collections.Generic.List[string]]`

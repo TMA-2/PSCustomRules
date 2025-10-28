@@ -5,6 +5,7 @@ using namespace Microsoft.Windows.Powershell.ScriptAnalyzer.Generic
 using namespace System.Collections.ObjectModel
 using namespace System.Collections.Generic
 
+# PSAlignEnumStatement
 function Measure-AlignEnumStatement {
     <#
     .SYNOPSIS
