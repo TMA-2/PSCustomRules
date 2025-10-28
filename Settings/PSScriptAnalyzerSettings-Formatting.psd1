@@ -9,30 +9,31 @@
         'PSUseConsistentIndentation'
         'PSUseConsistentWhitespace'
         # Custom Rules
-        'PSTypedVariableSpacing'
+        'PSAlignEnumStatement'
         'PSAvoidLongTypeNames'
+        'PSAvoidSimpleFunctions'
+        'PSCheckParamBlockParen'
+        'PSTypedVariableSpacing'
         'PSUseStaticConstructor'
     )
 
     CustomRulePath      = @(
-        '.\Public\Measure-LongTypeNames.psm1'
-        '.\Public\Measure-NewObject.psm1'
-        '.\Public\Measure-TypedVariableSpacing.psm1'
+        '.\..\'
+        # '.\Public\Measure-NewObject.psm1'
+        # '.\Public\Measure-TypedVariableSpacing.psm1'
     )
 
     IncludeDefaultRules = $true
 
     Rules               = @{
         # Custom rules
-        PSUseStaticConstructor = @{
-            Enable = $true
-        }
-        PSTypedVariableSpacing = @{
-            Enable = $true
-        }
         PSAvoidLongTypeNames   = @{
             Enable    = $true
             MaxLength = 30
+        }
+        PSAvoidSimpleFunctions   = @{
+            Enable    = $true
+            AddHelp   = $false
         }
         # Default rules
         PSProvideCommentHelp       = @{

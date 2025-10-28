@@ -19,11 +19,12 @@ $PrivateScripts + $PublicScripts | % {
 }
 
 $Functions = @(
-    'Measure-TypedVariableSpacing'
-    'Measure-CheckParamBlockParen'
+    'Measure-AlignEnumStatement'
     'Measure-AvoidLongTypeNames'
-    'Measure-UseStaticConstructor'
     'Measure-AvoidSimpleFunctions'
+    'Measure-CheckParamBlockParen'
+    'Measure-TypedVariableSpacing'
+    'Measure-UseStaticConstructor'
 )
 
 Export-ModuleMember -Function $Functions

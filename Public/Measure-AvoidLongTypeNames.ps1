@@ -24,7 +24,8 @@ function Measure-AvoidLongTypeNames {
         PS C:\> Measure-LongTypeNames -ScriptBlockAst $scriptBlockAst -Settings @{ MaxLength = 25 }
         Analyzes the provided script block AST for long type names longer than 25 characters and suggests corrections.
     .NOTES
-        Used in conjunction with PSScriptAnalyzer.
+        This rule is intended for use with the PSScriptAnalyzer module, and while it will surface diagnostic
+        records and corrections if passed in valid ASTs, it is not designed to be run directly by end users.
     #>
     [OutputType([List[DiagnosticRecord]])]
     [CmdletBinding()]
@@ -71,6 +72,7 @@ function Measure-AvoidLongTypeNames {
         # if we have requires statements, set the target "using namespace" line to one after the last entry
         if ($RequiresStatements) {
             $endLine = $RequiresStatements.ForEach({$_.Extent.EndLineNumber + 1}) | Sort-Object | Select-Object -Last 1
+            Write-Verbose "${RuleName}: Found requires statement(s) prior to $endLine"
         }
 
         # Alternate method
@@ -84,8 +86,8 @@ function Measure-AvoidLongTypeNames {
         try {
             $existingUsings = $ScriptBlockAst.FindAll({
                     param ($ast)
-                    $ast -is [UsingStatementAst] -and
-                    $ast.UsingStatementKind -eq 'Namespace'
+                    $ast -is [UsingStatementAst]
+                    # $ast.UsingStatementKind -eq 'Namespace'
                 }, $true)
         }
         catch {
@@ -93,15 +95,21 @@ function Measure-AvoidLongTypeNames {
             throw "Exception $($Err.Exception.HResult) traversing 'using namespace' AST entries > $($Err.Exception.Message)"
         }
 
+        $lineOneExtent = $ScriptBlockAst.Find({
+                param ($ast)
+                $ast -is [ScriptExtent] -and
+                $ast.StartLineNumber -eq 1 -and
+                $ast.EndLineNumber -eq 1
+            }, $true)
+
         # FIXME: existingNamespaceLastLine is not getting updated properly
-        $existingNamespaces = $defaultNamespaces + ($existingUsings | % { $_.Name.Value }) | select -Unique
-        $existingNamespaceLastLine = $existingUsings | % { $_.Extent.EndLineNumber + 1 } | Sort | select -Last 1
+        $existingNamespaces = $defaultNamespaces + ($existingUsings.Where({$_.UsingStatementKind -eq 'Namespace'}) | % { $_.Name.Value }) | select -Unique
+        $existingNamespaceLastLine = $existingUsings | % { $_.Extent.EndLineNumber + 1 } | Sort-Object | select -Last 1
 
         if ($existingNamespaceLastLine) {
             $endLine = [Math]::Max($endLine, $existingNamespaceLastLine)
+            Write-Verbose "${RuleName}: Found $($existingUsings.Count) using statements up to $endLine"
         }
-
-        Write-Verbose "${RuleName}: Found starting using namespace line at $endLine"
 
         try {
             # Find type expressions
@@ -123,6 +131,7 @@ function Measure-AvoidLongTypeNames {
             $typeFullName = $typeExpr.TypeName.Name
             $typeName = $typeExpr.TypeName.TypeName
             $typeType = $typeExpr.TypeName.GetReflectionType()
+            $assemblyType = $typeExpr.TypeName.AssemblyName
             # this only exists for parameterized types
             if ($typeName) {
                 $typeNameShort = $typeName.Name.TrimStart($typeType.Namespace)
@@ -156,11 +165,11 @@ function Measure-AvoidLongTypeNames {
                 $extent = $typeExpr.Extent
                 $originalText = $extent.Text
                 $classNameParams = ''
-                if($typeArgs) {
+                if ($typeArgs) {
                     $classNameParams = '['
                     $typeArgsCount = 1
                     # SECTION: Using namespace param correction
-                    foreach($typeArg in $typeArgs) {
+                    foreach ($typeArg in $typeArgs) {
                         # original = Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord
                         # namespace = Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic
                         # name = DiagnosticRecord
@@ -170,6 +179,7 @@ function Measure-AvoidLongTypeNames {
                         $typeArgNamespace = $typeArgType.Namespace
                         $typeArgName = $typeArgType.Name
                         $typeArgFullName = $typeArgType.FullName
+                        $typeArgNameShort = $typeArgFullName.TrimStart($typeArgNamespace)
                         if ($typeArgName.Length -lt $typeArgOriginal.Length) {
                             # if the usage is longer than the actual type name, add the namespace to references and use the short name
                             if ($typeArgNamespace -notin $existingNamespaces -and $classNameUsage[$typeArgName].Namespace -ne $typeArgNamespace) {
@@ -184,8 +194,10 @@ function Measure-AvoidLongTypeNames {
                                         "Add '$typeArgNamespace' type parameter reference"
                                     ))
                                 $existingNamespaces += $typeArgNamespace
-                                $classNameUsage[$typeArgName].Classname = $typeArgName
-                                $classNameUsage[$typeArgName].Namespace = $typeArgNamespace
+                                $classNameUsage[$typeArgName] = @{
+                                    Classname = $typeArgNameShort
+                                    Namespace = $typeArgNamespace
+                                }
                                 # $endLine++
                                 Write-Verbose "${RuleName}: Added correction 'using namespace $typeArgNamespace' for type parameter $typeArgName at $endLine"
                             }
@@ -204,11 +216,17 @@ function Measure-AvoidLongTypeNames {
                 # SECTION: Using namespace correction
                 if ($namespace -notin $existingNamespaces) {
                     $addedUsingNamespace = "using namespace $namespace`n"
+                    if ($endLine -eq 1) {
+                        $endCol = 1
+                    }
+                    else {
+                        $endCol = $addedUsingNamespace.Length
+                    }
                     $suggestedCorrections.Add([CorrectionExtent]::new(
                             $endLine,
                             $endLine,
                             1,
-                            $addedUsingNamespace.Length,
+                            $endCol,
                             $addedUsingNamespace,
                             $extent.File,
                             "Add '$namespace' type reference"
@@ -217,9 +235,19 @@ function Measure-AvoidLongTypeNames {
                 }
 
                 # SECTION: Class name correction
-                $correctedText = "[$($classNameUsage[$className].Classname)$classNameParams]"
+                if ($assemblyType) {
+                    $correctedText = "[$($classNameUsage[$className].Classname)$classNameParams, $AssemblyType]"
+                }
+                else {
+                    $correctedText = "[$($classNameUsage[$className].Classname)$classNameParams]"
+                }
                 # $correctedText = $originalText -replace [regex]::Escape($typeName), $className
-                $correctedLengthDifference = $correctedText.Length - $originalText.Length
+                if ($addedUsingNamespace) {
+                    $correctedLengthDifference = $correctedText.Length - $originalText.Length + $addedUsingNamespace.Length
+                }
+                else {
+                    $correctedLengthDifference = $correctedText.Length - $originalText.Length
+                }
 
                 $suggestedCorrections.Add([CorrectionExtent]::new(
                         $extent.StartLineNumber,

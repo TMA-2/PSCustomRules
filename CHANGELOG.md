@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2025-10-26
+
+### Fixed
+- Tried to fix an exception in Measure-AvoidLongTypeNames for paramterized types: "The property 'Classname' cannot be found on this object. Verify that the property exists and can be set."
+
+## [0.6.8] - 2025-10-22
+
+### Fixed
+- PSAlignEnumStatement extent when an attribute (e.g `FlagsAttribute`) is present
+- PSAvoidSimpleFunctions indentation when inside another function or the start column is > 1.
+- PSAvoidLongTypeNames `using` correction now inserts instead of overwriting existing lines by setting the column extent to 1
+
+## [0.6.7] - 2025-10-21
+
+### Added
+- `Measure-AlignEnumStatement`, since PSAlignAssignmentStatement doesn't include enums.
+
+### Changed
+- Renamed `Measure-CheckKeywordSpacing` to `Measure-UseConsistentWhitespaceEx`
+
 ## [0.5.7] - 2025-10-20
 
 ### Changed
