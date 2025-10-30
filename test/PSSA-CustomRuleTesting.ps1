@@ -67,6 +67,22 @@ Enum TestEnumBitwise {
 #region PSAvoidSimpleFunctions testing
 # SECTION: simple function
 function SimpleFunction([string] $Msg) {
+    <#
+    .SYNOPSIS
+        Simple function.
+    .DESCRIPTION
+        It's... a simple function.
+    .PARAMETER Msg
+        The message to output.
+    .NOTES
+        For testing PSAvoidSimpleFunctions CBH handling.
+    .LINK
+        www.microsoft.com
+    .EXAMPLE
+        SimpleFunction 'hi'
+        returns... 'hi'
+    #>
+
     Write-Output $Msg
 }
 # SECTION: Filter function
@@ -118,6 +134,20 @@ function AdvFunction {
     # simple function inside advanced function
     begin {
         function local:logMsg([string]$Msg) {
+            <#
+            .SYNOPSIS
+                Inline embedded function test
+            .DESCRIPTION
+                It's a test for an embedded/indented simple function with CBH.
+            .PARAMETER Msg
+                A string.
+            .NOTES
+                Hopefully it works.
+            .EXAMPLE
+                local:logMsg 'hi'
+                Returns... 'hi'
+            #>
+
             Write-Host $Msg
         }
     }
