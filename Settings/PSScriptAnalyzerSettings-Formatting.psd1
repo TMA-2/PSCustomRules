@@ -9,12 +9,12 @@
         'PSUseConsistentIndentation'
         'PSUseConsistentWhitespace'
         # Custom Rules
-        'PSAlignEnumStatement'
-        'PSAvoidLongTypeNames'
-        'PSAvoidSimpleFunctions'
-        'PSCheckParamBlockParen'
-        'PSTypedVariableSpacing'
-        'PSUseStaticConstructor'
+        'Measure-AlignEnumStatement'
+        'Measure-AvoidLongTypeNames'
+        'Measure-AvoidSimpleFunctions'
+        # 'Measure-CheckParamBlockParen'
+        # 'Measure-TypedVariableSpacing'
+        'Measure-UseStaticConstructor'
     )
 
     CustomRulePath      = @(
