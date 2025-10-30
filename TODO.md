@@ -104,7 +104,12 @@
 - [x] Get corrections working
 - [ ] Get settings working
   - [ ] Test `-AddHelp` setting
-- [ ] Use rule in `VSCodeProfile\Convert-EditorFunction` instead of duplicating work
+- [ ] Use rule for `VSCodeProfile\Convert-EditorFunction` instead of duplicating work
+- [ ] Use original CBH text from tokens, as `GetCommentBlock()` reconstructs it
+  - [ ] Surface a setting to format CBH?
+- [ ] Differentiate between CBH positions
+  - [x] Inside function: `Body.Extent.Text -match '\.SYNOPSIS'`
+  - [ ] Figure out how to determine if it's at the function end (edge case)
 - [x] Respect indentation for inline functions
 - [x] Modify rule to exclude filters, workflows, and class ctors/methods
   - [x] Check that the Parent AST isn't a `FunctionMemberAst` or `TypeDefinitionAst`

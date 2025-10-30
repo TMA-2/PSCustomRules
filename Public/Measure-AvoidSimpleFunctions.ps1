@@ -49,6 +49,93 @@ function Measure-AvoidSimpleFunctions {
         $Output = ''
         $CommentBasedHelp = ''
         $VERBOSE = $PSBoundParameters.ContainsKey('Verbose')
+        $CRLF = [environment]::NewLine
+
+        function generateHelpSection {
+            param (
+                [Parameter()]
+                [string]$Indent = '',
+                [Parameter(Mandatory)]
+                [string]$SectionTitle,
+                [Parameter()]
+                [string]$SectionValue,
+                [Parameter()]
+                [string]$Content
+            )
+
+            $HelpContent = '{0}.{1}' -f $Indent, $SectionTitle
+            if ($SectionValue) {
+                $HelpContent += " $SectionValue$CRLF"
+            }
+            else {
+                $HelpContent += $CRLF
+            }
+
+            if ($Content) {
+                $HelpContent += '{0}{2}{1}' -f $Indent, $CRLF, $Content
+            }
+
+            return $HelpContent
+        }
+
+        function generateHelpBlock {
+            [CmdletBinding()]
+            param (
+                [string]$Indent,
+                [Parameter(Mandatory)]
+                [CommentHelpInfo]$HelpContent,
+                [string]$InnerIndent = "$Indent      "
+            )
+            $HelpContentOutput = ''
+            $HelpContentOutput += "$Indent<#$CRLF"
+            if ($HelpContent.Synopsis) {
+                $HelpContentOutput += generateHelpSection -Indent $InnerIndent -SectionTitle 'SYNOPSIS' -Content $HelpContent.Synopsis
+            }
+            if ($HelpContent.Description) {
+                $HelpContentOutput += generateHelpSection -Indent $InnerIndent -SectionTitle 'DESCRIPTION' -Content $HelpContent.Description
+            }
+            $HelpContent.Parameters.GetEnumerator() | % {
+                $HelpContentOutput += generateHelpSection -Indent $InnerIndent -SectionTitle "PARAMETER" -SectionValue $_.Key -Content $_.Value
+            }
+            $HelpContent.Examples | % {
+                $HelpContentOutput += generateHelpSection -Indent $InnerIndent -SectionTitle 'EXAMPLE' -Content $_
+            }
+            $HelpContent.Inputs | % {
+                $HelpContentOutput += generateHelpSection -Indent $InnerIndent -SectionTitle 'INPUTS' -Content $_
+            }
+            $HelpContent.Outputs | % {
+                $HelpContentOutput += generateHelpSection -Indent $InnerIndent -SectionTitle 'OUTPUTS' -Content $_
+            }
+            if ($HelpContent.Notes) {
+                $HelpContentOutput += generateHelpSection -Indent $InnerIndent -SectionTitle 'NOTES' -Content $HelpContent.Notes
+            }
+            $HelpContent.Links | % {
+                $HelpContentOutput += generateHelpSection -Indent $InnerIndent -SectionTitle 'LINKS' -Content $_
+            }
+            if ($HelpContent.Component) {
+                $HelpContentOutput += generateHelpSection -Indent $InnerIndent -SectionTitle 'COMPONENT' -Content $HelpContent.Component
+            }
+            if ($HelpContent.Role) {
+                $HelpContentOutput += generateHelpSection -Indent $InnerIndent -SectionTitle 'ROLE' -Content $HelpContent.Role
+            }
+            if ($HelpContent.Functionality) {
+                $HelpContentOutput += generateHelpSection -Indent $InnerIndent -SectionTitle 'FUNCTIONALITY' -Content $HelpContent.Functionality
+            }
+            if ($HelpContent.ForwardHelpTargetName) {
+                $HelpContentOutput += generateHelpSection -Indent $InnerIndent -SectionTitle 'FORWARDHELPTARGETNAME' -SectionValue $HelpContent.ForwardHelpTargetName
+            }
+            if ($HelpContent.ForwardHelpCategory) {
+                $HelpContentOutput += generateHelpSection -Indent $InnerIndent -SectionTitle 'FORWARDHELPCATEGORY' -SectionValue $HelpContent.ForwardHelpCategory
+            }
+            if ($HelpContent.RemoteHelpRunspace) {
+                $HelpContentOutput += generateHelpSection -Indent $InnerIndent -SectionTitle 'REMOTEHELPRUNSPACE' -SectionValue $HelpContent.RemoteHelpRunspace
+            }
+            if ($HelpContent.MamlHelpFile) {
+                $HelpContentOutput += generateHelpSection -Indent $InnerIndent -SectionTitle 'EXTERNALHELP' -SectionValue $HelpContent.MamlHelpFile
+            }
+            $HelpContentOutput += "$Indent#>$CRLF"
+            $HelpContentOutput
+        }
     }
 
     process {
@@ -76,7 +163,7 @@ function Measure-AvoidSimpleFunctions {
             return
         }
 
-
+        # SECTION: Loop through violations
         foreach($Function in $Violations) {
             $suggestedCorrections = [Collection[CorrectionExtent]]::new()
 
@@ -86,31 +173,71 @@ function Measure-AvoidSimpleFunctions {
 
             # Construct function definition
             if ($FunctionScope) {
-                $Output = "function ${FunctionScope}:$FunctionName {`n"
+                $Output = "function ${FunctionScope}:$FunctionName {$CRLF"
             }
             else {
-                $Output = "function $FunctionName {`n"
+                $Output = "function $FunctionName {$CRLF"
             }
 
+            # region Build help content
+            # Existing CBH takes precedence over generated help
+            if ($Function.HelpContent) {
+                $CBHelp = $true
+            }
+            else {
+                $CBHelp = $false
+            }
+
+            $AddHelp = $AddHelp -and -not $CBHelp
+
+            # Build comment-based help if enabled
             if ($AddHelp) {
                 $FunctionExists = Get-Command $FunctionName -ea SilentlyContinue
                 if ($FunctionExists) {
                     $FunctionHelp = Get-Help $FunctionName -ea SilentlyContinue
-                    $CommentBasedHelp += "<#`n.SYNOPSIS`n$($FunctionHelp.Synopsis)`n.DESCRIPTION`n"
+                    $CommentBasedHelp += "$Indent<#$CRLF$Indent.SYNOPSIS$CRLF$($FunctionHelp.Synopsis)$CRLF$Indent.DESCRIPTION$CRLF"
                     if ($FunctionHelp.Description) {
-                        $CommentBasedHelp += "$($FunctionHelp.Description)`n"
+                        $CommentBasedHelp += "$($FunctionHelp.Description)$CRLF"
                     }
                     else {
-                        $CommentBasedHelp += "Function description`n"
+                        $CommentBasedHelp += "Function description$CRLF"
                     }
                 }
                 else {
-                    $CommentBasedHelp += "<#`n.SYNOPSIS`n$FunctionName`n.DESCRIPTION`n$FunctionName`n"
+                    $CommentBasedHelp += "$Indent<#$CRLF$Indent.SYNOPSIS$CRLF$FunctionName$CRLF$Indent.DESCRIPTION$CRLF$FunctionName$CRLF"
                 }
             }
+            elseif($CBHelp) {
+                # use existing help content
+                $CBHSplit = $Function.HelpContent.GetCommentBlock().Split([environment]::NewLine)
+                $CBHelpLineCount = $CBHSplit.Count
+                $CBHInside = $Function.BodyExtent.Text -match '\.SYNOPSIS'
+                # find length of last non-empty line
+                for ($i = -1; $i -gt -$CBHSplit.Count; $i--) {
+                    if ($CBHSplit[$i].Trim().Length -gt 0) {
+                        $CBHelpLastCol = $CBHSplit[$i].Trim().Length
+                        break
+                    }
+                }
+                foreach ($Line in $CBHSplit) {
+                    if ($Line.Trim().Length -eq 0) {
+                        $CommentBasedHelp += "$Indent$CRLF"
+                    }
+                    else {
+                        $CommentBasedHelp += "$Indent$Line$CRLF"
+                    }
+                }
+                if ($CBHInside) {
+                    $Output += $CommentBasedHelp
+                }
+                # re-generate dynamically
+                # $CommentBasedHelp = generateHelpBlock -HelpContent $FunctionHelp -Indent $Indent
+                # $Output += $CommentBasedHelp
+            }
+            #endregion Build help content
 
-            $Output += "$Indent    [CmdletBinding()]`n"
-            $Output += "$Indent    param (`n"
+            $Output += "$Indent    [CmdletBinding()]$CRLF"
+            $Output += "$Indent    param ($CRLF"
 
             $ParamCount = 1
 
@@ -123,33 +250,33 @@ function Measure-AvoidSimpleFunctions {
 
                 # Build CBH parameters
                 if ($AddHelp) {
-                    $CommentBasedHelp += ".PARAMETER $ParamName`n"
+                    $CommentBasedHelp += "$Indent.PARAMETER $ParamName$CRLF"
                     if ($FunctionExists -and $FunctionHelp) {
                         $ParamHelpInfo = $FunctionHelp.parameters.parameter | Where-Object Name -eq $ParamName
                         $ParamHelpType = $ParamHelpInfo.type.name
-                        $ParamHelpDesc = $ParamHelpInfo.description.text -join "`n"
+                        $ParamHelpDesc = $ParamHelpInfo.description.text -join "$CRLF"
                         $ParamHelpMandatory = if ($ParamHelpInfo.required -eq 'true') {'(Mandatory) '}
                         $ParamHelpDefault = $ParamHelpInfo.defaultValue
                         if($ParamHelpDefault) {
-                            $CommentBasedHelp += "$ParamHelpMandatory$ParamHelpDesc`n[Type] Default value: [$ParamHelpType] $ParamHelpDefault`n"
+                            $CommentBasedHelp += "$ParamHelpMandatory$ParamHelpDesc$CRLF$Indent[Type] Default value: [$ParamHelpType] $ParamHelpDefault$CRLF"
                         }
                         else {
-                            $CommentBasedHelp += "$ParamHelpMandatory$ParamHelpDesc`nType: [$ParamHelpType]`n"
+                            $CommentBasedHelp += "$ParamHelpMandatory$ParamHelpDesc$CRLF${Indent}Type: [$ParamHelpType]$CRLF"
                         }
                     }
                     elseif ($FunctionExists) {
                         $CommentBasedHelp += "Type: $ParamType."
                         if ($ParamValue) {
-                            $CommentBasedHelp += " Default value: $ParamValue`n"
+                            $CommentBasedHelp += " Default value: $ParamValue$CRLF"
                         }
                     }
-                    $CommentBasedHelp += ".NOTES`nConverted automatically from simple function.`n#>`n"
+                    $CommentBasedHelp += "${Indent}.NOTES$CRLF${Indent}Converted automatically from simple function.$CRLF${Indent}#>$CRLF"
                 }
 
                 #region Reconstruct parameter attributes
                 Write-Verbose "Processing parameter $ParamName with $($Param.Attributes.Count) attributes..."
                 foreach ($Attr in $Param.Attributes) {
-                    $Output += "$Indent        [$($Attr.Name)(`n"
+                    $Output += "$Indent        [$($Attr.Name)($CRLF"
                     $CombinedArgs = [string[]]@()
                     $ArgsCount = 1
 
@@ -159,10 +286,10 @@ function Measure-AvoidSimpleFunctions {
                         $AttribName = $Attrib.Name
                         $AttribArgs = $Attrib.Value
                         if ($ArgsCount -lt $Attr.Arguments.Count) {
-                            $Ending = ",`n"
+                            $Ending = ",$CRLF"
                         }
                         else {
-                            $Ending = "`n"
+                            $Ending = "$CRLF"
                         }
 
                         if ($AttribName) {
@@ -187,14 +314,14 @@ function Measure-AvoidSimpleFunctions {
                     if ($CombinedArgs.Count -gt 0) {
                         $JoinedArgs = $CombinedArgs -join ', '
                         Write-Verbose ">> Appending attribute values $JoinedArgs"
-                        $Output += "$Indent            $JoinedArgs`n"
+                        $Output += "$Indent            $JoinedArgs$CRLF"
                     }
-                    $Output += "$Indent        )]`n"
+                    $Output += "$Indent        )]$CRLF"
                     $AttribCount++
                 }
                 #endregion Reconstruct parameter attributes
 
-                $Output += "$Indent        $ParamType`n"
+                $Output += "$Indent        $ParamType$CRLF"
                 if ($null -ne $ParamValue) {
                     # Add parameter default value
                     $Output += "$Indent        `$$ParamName = $ParamValue"
@@ -205,10 +332,10 @@ function Measure-AvoidSimpleFunctions {
                 }
                 if ($ParamCount -lt $Function.Parameters.Count) {
                     # Add empty line between parameters
-                    $Output += ",`n`n"
+                    $Output += ",$CRLF$CRLF"
                 }
                 else {
-                    $Output += "`n"
+                    $Output += "$CRLF"
                 }
                 $ParamCount++
             }
@@ -218,7 +345,12 @@ function Measure-AvoidSimpleFunctions {
                 $Output = $CommentBasedHelp + $Output
             }
 
-            $Output += "$Indent    )`n"
+            $Output += "$Indent    )$CRLF"
+
+            # add CBH before the function definition
+            if ($CBHelp -and -not $CBHInside) {
+                $Output = $CommentBasedHelp + $Output
+            }
 
             # subtract function extent StartOffset from EndOffset to get ending offsetInLine
             # Create: [ScriptExtent]::new(<ScriptPosition> startPosition, <ScriptPosition> endPosition)
@@ -236,13 +368,41 @@ function Measure-AvoidSimpleFunctions {
             $BodyStartColumn = $Function.BodyExtent.StartColumnNumber + 1
             Write-Verbose "Converted simple function to advanced; from $($Function.OriginalText.Length) to $($Output.Length) chars"
 
+            # find length of last non-empty line
+            <# $OutputSplit = $Output.Split($CRLF)
+            for($i = -1; $i -gt -$OutputSplit.Count; $i--) {
+                $OutputLine = $OutputSplit[$i].Trim()
+                if ($OutputLine.Length -gt 0) {
+                    $CBHelpLastCol = $OutputLine.Length
+                    break
+                }
+            } #>
+
+            $CorrectionStartLine = $ExtentStartLine
+            $CorrectionEndLine = $BodyStartLine
+            $CorrectionStartColumn = $ExtentStartColumn
+            $CorrectionEndColumn = $BodyStartColumn
+
+            if ($CBHelp) {
+                # this only supports CBH at function starts; CBH at function ends are an edge case anyway
+                if ($CBHInside) {
+                    $CorrectionEndLine += $CBHelpLineCount
+                    $CorrectionEndColumn = $CBHelpLastCol + $Indent.Length + 4
+                }
+                else {
+                    $CorrectionStartLine -= $CBHelpLineCount
+                }
+            }
+
+            Write-Verbose "Surfacing diagnostic extent from ${ExtentStartLine}:$ExtentStartColumn to ${BodyStartLine}:$BodyStartColumn"
             $RecordExtent = New-ScriptExtent -Extent $Function.Extent -StartLineNumber $ExtentStartLine -EndLineNumber $BodyStartLine -StartColumn $ExtentStartColumn -EndColumn $BodyStartColumn
 
+            Write-Verbose "Surfacing correction extent from ${CorrectionStartLine}:$CorrectionStartColumn to ${CorrectionEndLine}:$CorrectionEndColumn"
             $suggestedCorrections.Add([CorrectionExtent]::new(
-                    $ExtentStartLine,
-                    $BodyStartLine,
-                    $ExtentStartColumn,
-                    $BodyStartColumn,
+                    $CorrectionStartLine,
+                    $CorrectionEndLine,
+                    $CorrectionStartColumn,
+                    $CorrectionEndColumn,
                     $Output,
                     $Function.Extent.File,
                     "Convert to advanced function of $($Output.Length) chars"

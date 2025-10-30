@@ -123,6 +123,7 @@ function findEditorSimpleFunctions {
                 BodyExtent   = $FunctionDef.Body.Extent
                 Extent       = $FunctionDef.Extent
                 OriginalText = $FunctionDef.Extent.Text
+                HelpContent  = $FunctionDef.GetHelpContent()
             }
         }
     }

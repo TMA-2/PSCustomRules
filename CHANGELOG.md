@@ -4,10 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-10-26
+## [0.6.10] - 2025-10-29
+
+### Added
+- Added existing comment-based help generation to `Measure-AvoidSimpleFunctions` which takes precedence over the **AddHelp** setting, if present.
+- `Measure-AvoidSimpleFunction` inline functions `generateHelpSection` and `generateHelpBlock` for the above (although it was a fool's errand).
+
+### Changed
+- `FindEditorSimpleFunction` now returns a `[CommentHelpInfo]`-typed **CommentHelp** property
 
 ### Fixed
-- Tried to fix an exception in Measure-AvoidLongTypeNames for paramterized types: "The property 'Classname' cannot be found on this object. Verify that the property exists and can be set."
+- Fixed `Measure-AvoidSimpleFunctions` correction extent when existing CBH is present at the start of the function.
+
+## [0.6.9] - 2025-10-26
+
+### Fixed
+- Tried to fix an exception in `Measure-AvoidLongTypeNames` for paramterized types: "The property 'Classname' cannot be found on this object. Verify that the property exists and can be set."
 
 ## [0.6.8] - 2025-10-22
 

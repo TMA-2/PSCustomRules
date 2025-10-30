@@ -1,12 +1,12 @@
 @{
     # ref: https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/using-scriptanalyzer?view=ps-modules#custom-rules
     IncludeRules   = @(
-        'PSAlignEnumStatement'
-        'PSAvoidLongTypeNames'
-        'PSAvoidSimpleFunctions'
-        'PSCheckParamBlockParen'
-        'PSTypedVariableSpacing'
-        'PSUseStaticConstructor'
+        'Measure-AlignEnumStatement'
+        'Measure-AvoidLongTypeNames'
+        'Measure-AvoidSimpleFunctions'
+        # 'Measure-CheckParamBlockParen'
+        # 'Measure-TypedVariableSpacing'
+        'Measure-UseStaticConstructor'
     )
 
     CustomRulePath = @(
@@ -18,7 +18,7 @@
     Rules          = @{
         PSAvoidLongTypeNames   = @{
             Enable    = $true
-            MaxLength = 40
+            MaxLength = 30
         }
 
         PSAvoidSimpleFunctions = @{
