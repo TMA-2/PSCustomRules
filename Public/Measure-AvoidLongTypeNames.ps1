@@ -149,6 +149,13 @@ function Measure-AvoidLongTypeNames {
 
             $namespace = $typeType.Namespace
             $className = $typeType.Name
+            $parentIsClass = $false
+
+            if ($typeExpr.Parent -is [TypeDefinitionAst]) {
+                # $typeExpr.Parent.IsClass
+                # for tracking inherited class names so brackets can be left off
+                $parentIsClass = $true
+            }
 
             try {
                 # Check for class name conflicts
@@ -235,11 +242,13 @@ function Measure-AvoidLongTypeNames {
                 }
 
                 # SECTION: Class name correction
+                $BracketStart = if ($parentIsClass) { '' } else { '[' }
+                $BracketEnd = if ($parentIsClass) { '' } else { ']' }
                 if ($assemblyType) {
-                    $correctedText = "[$($classNameUsage[$className].Classname)$classNameParams, $AssemblyType]"
+                    $correctedText = "$BracketStart$($classNameUsage[$className].Classname)$classNameParams, $AssemblyType$BracketEnd"
                 }
                 else {
-                    $correctedText = "[$($classNameUsage[$className].Classname)$classNameParams]"
+                    $correctedText = "$BracketStart$($classNameUsage[$className].Classname)$classNameParams$BracketEnd"
                 }
                 # $correctedText = $originalText -replace [regex]::Escape($typeName), $className
                 if ($addedUsingNamespace) {

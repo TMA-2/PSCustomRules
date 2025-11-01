@@ -3,7 +3,6 @@
 #region PSAvoidLongTypeNames testing
 using namespace System.Collections.Specialized
 using namespace System.Management.Automation
-using module PSCustomRules
 using assembly 'c:\Program Files\PowerShell\7\Microsoft.PowerShell.Commands.Utility.dll'
 # this comment should not get overwritten by the rule!
 
@@ -43,6 +42,17 @@ $StringBuilderArgs = New-Object System.Text.StringBuilder -ArgumentList @([strin
 $PSObject = New-Object System.Management.Automation.PSCustomObject -Property @{ Key1 = "Test"; Key2 = 123 }
 #endregion PSUseStaticConstructor testing
 
+$testHT = @{
+    Key1 = 'test'
+    AnotherKey = 'another test'
+}
+
+$testHT = @{
+    RegularKey = 'test'
+    KeyWithStreamComment <# hi there, I'm fucking this all up! #> = 'oh no'
+    KeyWithBlockComment = 'still works' # just a normal comment
+}
+
 #region PSAlignEnumStatement testing
 Enum TestEnum {
     Unknown = -1 # Test block comment handling
@@ -56,11 +66,10 @@ Enum TestEnum {
 
 [FlagsAttribute()]
 Enum TestEnumBitwise {
-    ValueZero = 0x00
-    ValueOne # = 0x01
-    ValueTwo # = 0x02
-    ValueEight = 0x08
-    ValueSixteen = 0x10
+    ValueZero # Implied value
+    <# Pre-member #> ValueTwo = 0x02
+    ValueEight = <# Post-assignment #> 0x08
+    ValueSixteen <# Pre-assignment #> = 0x10
 }
 #endregion PSAlignEnumStatement testing
 
@@ -94,11 +103,17 @@ filter SimpleFilter {
 #     Write-Output "In Workflow"
 # }
 # SECTION DSC function
-configuration DSCFunction {
+<# configuration DSCFunction {
     Node localhost {
-        Write-Output "In DSC"
+        Registry Example {
+            Ensure = "Present"
+            Key = "HKEY_LOCAL_MACHINE\Software\Example"
+            ValueName = "TestValue"
+            ValueData = "TestData"
+            ValueType = "String"
+        }
     }
-}
+} #>
 # SECTION: simple function with inline attributes
 function private:SimpleFunctionWithAttr([Parameter(Mandatory,Position=0)][string]$Msg, [switch]$Flag, [ValidateRange(1,10)][int]$Count=1) {
     if ($Flag) {

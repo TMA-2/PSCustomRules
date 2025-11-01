@@ -76,24 +76,64 @@ function Measure-AlignEnumStatement {
 
                 $initialIndent = ' ' * ($Violation.Extent.StartColumnNumber - 1)
 
+                $startLine = $Violation.Extent.StartLineNumber
+
                 $attributes = $Violation.Attributes
                 if ($attributes) {
                     Write-Verbose "Enum has attributes; preserving in correction."
-                    # $correctedLines += $attribute.Extent.Text
+                    # adjust the extent startline to account for attributes
+                    $startLine += $attributes.Count
                 }
 
+                # construct the corrected enum definition
                 $correctedLines += "{0}enum {1} {{" -f $initialIndent, $Violation.Name
 
+                # we want any inline comments in order to reconstruct them
+                $violationTextTokens = $errors = $null
+                $EnumAst = [Parser]::ParseInput($Violation.Extent.Text, [ref]$violationTextTokens, [ref]$errors)
+
+                $violationTextComments = $violationTextTokens | ? Kind -eq 'Comment'
+
                 $EnumMembers = $Violation.Members
-                $MaxNameLength = $EnumMembers | ForEach-Object { $_.Name.Length } | Sort-Object | Select-Object -Last 1
+                $MaxLength = $EnumMembers | ForEach-Object {
+                    $EnumLine = $_.Extent.StartLineNumber
+                    $Comment = $violationTextComments | Where-Object {
+                        $_.Extent.StartLineNumber -eq $EnumLine
+                    }
+                    $_.Name.Length + $Comment.Extent.Text.Length
+                } | Sort-Object | Select-Object -Last 1
+
+                <# account for the enum definition and any attributes
+                $lineCount = 1 + $attributes.Count
+
+                $EnumBuilder = [List[hashtable]]::new()
+                # hashtable outline
+                @{
+                    Name            = 'EnumValue'
+                    Value           = '0x01'
+                    Comment         = 'Stream Comment'
+                    CommentPosition = 'Left' # Start <Member> Left = Right <Value> End
+                    Length          = 29
+                } #>
+
+                # keep a running count of the longest value + inline comment
+                $lineCount = 1
+                $MaxLength = 0
 
                 foreach ($member in $EnumMembers) {
+                    # determine where the comment is in relation to the member and operator. If it's to the left of the operator, factor it into MaxLength
+                    # $relativeLine = $member.Extent.StartLineNumber - $Violation.Extent.StartLineNumber + 2
+                    # the operator isn't in AST, so we're gonna have to regex this fuck
+                    # before member '<#.*#>.+(?==)'
+                    # after member '<#.*#> *(?==)'
+                    # else: we don't care, stick the comment at the end
+
                     $indent = ' ' * ($member.Extent.StartColumnNumber - 1)
                     $name = $member.Name
                     if ($null -ne $member.InitialValue) {
                         $value = $member.InitialValue.Extent.Text
 
-                        $spaces = ' ' * ($MaxNameLength - $name.Length)
+                        $spaces = ' ' * ($MaxLength - $name.Length)
 
                         $correctedLine = '{0}{1}{2} = {3}' -f $indent, $name, $spaces, $value
                         $correctedLines += $correctedLine
@@ -102,25 +142,25 @@ function Measure-AlignEnumStatement {
                         # No initial value; just use the name
                         $correctedLines += '{0}{1}' -f $indent, $name
                     }
+                    $lineCount++
                 }
 
                 $correctedLines += "}"
 
                 $correctedLinesJoined = $correctedLines -join [Environment]::NewLine
 
-                if ($correctedLinesJoined -eq $Violation.Extent.Text) {
-                    continue
-                }
+                # get the original text without attributes for comparison
+                $violationTextSplit = $Violation.Extent.Text.Split([Environment]::NewLine)
+                $violationTextNoAttributes = $violationTextSplit[$attributes.Count..$violationTextSplit.GetUpperBound(0)] -join [Environment]::NewLine
 
-                $StartLine = $Violation.Extent.StartLineNumber
-                if ($attributes) {
-                    $StartLine += $attributes.Count
+                if ($correctedLinesJoined -eq $violationTextNoAttributes) {
+                    continue
                 }
 
                 $ExtentSplat = @{
                     Extent          = $Violation.Extent
-                    StartLineNumber = $StartLine
-                    EndLineNumber   = $StartLine
+                    StartLineNumber = $startLine
+                    EndLineNumber   = $startLine
                     EndColumn       = $Violation.Extent.StartColumnNumber + $correctedLines[0].Length
                 }
 
