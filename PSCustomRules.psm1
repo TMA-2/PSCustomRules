@@ -21,6 +21,7 @@ $PrivateScripts + $PublicScripts | % {
 $Functions = @(
     'Measure-AlignEnumStatement'
     'Measure-AvoidLongTypeNames'
+    'Measure-AvoidOutNull'
     'Measure-AvoidSimpleFunctions'
     'Measure-CheckParamBlockParen'
     'Measure-TypedVariableSpacing'

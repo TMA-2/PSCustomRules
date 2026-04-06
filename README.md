@@ -7,6 +7,25 @@ This is an attempt to create custom PSScriptAnalyzer rules, both custom and as s
 ### PSAlignEnumStatement
 Since PSAlignAssignmentStatement doens't include enums... here we are.
 
+### PSAvoidOutNull
+Looks for instances of `Out-Null` and offers a fix to convert them to `$null =` assignments or casts to `[void]`.
+
+**Function:** `Measure-AvoidOutNull`
+
+**Configure:**
+```powershell
+@{
+    Rules = @{
+        PSAvoidOutNull       = @{
+            Enable               = $true
+            PreferNullAssignment = $true
+        }
+    }
+}
+```
+
+- **PreferNullAssignment** when `$true`, offers fixes that assign to `$null` instead of casting to `[void]`.
+
 ### PSAvoidLongTypeNames
 Looks for .NET type names longer than 30 characters, although that's meant to be configurable (see below).
 Attempts to offer a fix that inserts a `using namespace` reference at the top of the script, and converts the type to only the class name.
@@ -25,6 +44,8 @@ Attempts to offer a fix that inserts a `using namespace` reference at the top of
 }
 ```
 
+- **MaxLength** is the maximum length of a .NET type name before it is considered "long".
+
 ### PSAvoidSimpleFunctions
 Finds simple/inline functions and converts them to advanced functions, with an optional comment-based help setting.
 
@@ -35,12 +56,18 @@ Finds simple/inline functions and converts them to advanced functions, with an o
 @{
     Rules = @{
         PSAvoidSimpleFunctions       = @{
-            Enable  = $true
-            AddHelp = $true
+            Enable                 = $true
+            AddHelp                = $true
+            ParamTypeOnNewLine     = $true
+            EmptyLineBetweenParams = $true
         }
     }
 }
 ```
+
+- **AddHelp** will insert a basic comment-based help block if one doesn't already exist. Existing CBH is first checked and used if it exists, and if not, a new one is created from Get-Help content.
+- **ParamTypeOnNewLine** will separate parameter type and name with a newline.
+- **EmptyLineBetweenParams** will insert an empty line between parameters in the param block.
 
 ### PSCheckParamBlockParen
 Very simple. Checks for param blocks and inserts a space, e.g. `param (`. Includes param blocks with newlines before the opening paranthesis.
@@ -72,6 +99,10 @@ Needs work to better convert `-ArgumentList` parameters.
 $Registry = New-Object 'Microsoft.Win32.Registry'
 # after
 $Registry = [Microsoft.Win32.Registry]::new()
+# before
+$RegistryAccessRule = New-Object System.Security.AccessControl.RegistryAccessRule($User, $Rights, 'Allow')
+# after
+$RegistryAccessRule = [System.Security.AccessControl.RegistryAccessRule]::new($User, $Rights, 'Allow')
 ```
 
 ## Planned Rules

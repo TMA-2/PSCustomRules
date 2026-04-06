@@ -42,7 +42,12 @@ function Measure-AvoidSimpleFunctions {
             ValueFromPipeline
         )]
         [hashtable]
-        $Settings
+        $Settings = @{
+            Enable                 = $true
+            AddHelp                = $false
+            ParamTypeOnNewLine     = $true
+            EmptyLineBetweenParams = $true
+        }
     )
 
     begin {
@@ -141,19 +146,17 @@ function Measure-AvoidSimpleFunctions {
     process {
         $DiagnosticRecords = [List[DiagnosticRecord]]::new()
 
-        if ($Settings -and -not $Settings['Enable']) {
+        if (-not $Settings['Enable']) {
             Write-Verbose "Rule is disabled in settings."
             return
         }
 
-        $AddHelp = $false
-
-        if ($Settings -and $Settings.ContainsKey('AddHelp')) {
-            $AddHelp = $Settings['AddHelp']
-        }
+        $AddHelp = $Settings['AddHelp']
+        $ParamTypeOnNewline = $Settings['ParamTypeOnNewLine']
+        $EmptyLineBetweenParams = $Settings['EmptyLineBetweenParams']
 
         # Find the simple function definitions in the passed script block AST.
-        $Violations = findEditorSimpleFunctions -ScriptBlockAst $ScriptBlockAst
+        $Violations = Find-EditorSimpleFunction -ScriptBlockAst $ScriptBlockAst
 
         if ($Violations) {
             Write-Verbose "Found simple functions '$($Violations.Count)'"
@@ -244,7 +247,7 @@ function Measure-AvoidSimpleFunctions {
             #region Reconstruct parameters
             foreach ($Param in $Function.Parameters) {
                 $ParamName = $Param.Name
-                $ParamType = "[$($Param.Type)]"
+                $ParamType = if ($Param.Type) { "[$($Param.Type)]" } else { $null }
                 $ParamValue = $Param.DefaultValue
                 $AttribCount = 1
 
@@ -294,7 +297,7 @@ function Measure-AvoidSimpleFunctions {
 
                         if ($AttribName) {
                             # Write-Verbose ">> Processing attribute argument $AttribName with value $AttribArgs"
-                            $Output += "$Indent           $AttribName"
+                            $Output += "$Indent            $AttribName"
                             if ($AttribArgs) {
                                 # Arguments with Parameter and Value
                                 $Output += " = $AttribArgs$Ending"
@@ -321,18 +324,27 @@ function Measure-AvoidSimpleFunctions {
                 }
                 #endregion Reconstruct parameter attributes
 
-                $Output += "$Indent        $ParamType$CRLF"
-                if ($null -ne $ParamValue) {
-                    # Add parameter default value
-                    $Output += "$Indent        `$$ParamName = $ParamValue"
-                }
-                else {
-                    # Parameter only
+                if ($ParamType -and $ParamTypeOnNewline) {
+                    # Separate type with new line
+                    $Output += "$Indent        $ParamType$CRLF"
                     $Output += "$Indent        `$$ParamName"
                 }
+                else {
+                    $Output += "$Indent        $ParamType`$$ParamName"
+                }
+                if ($ParamValue) {
+                    # Add parameter default value
+                    $Output += " = $ParamValue"
+                }
+
                 if ($ParamCount -lt $Function.Parameters.Count) {
-                    # Add empty line between parameters
-                    $Output += ",$CRLF$CRLF"
+                    # Add empty line between parameters based on settings
+                    if ($EmptyLineBetweenParams) {
+                        $Output += ",$CRLF$CRLF"
+                    }
+                    else {
+                        $Output += ",$CRLF"
+                    }
                 }
                 else {
                     $Output += "$CRLF"

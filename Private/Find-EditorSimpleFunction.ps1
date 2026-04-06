@@ -1,6 +1,6 @@
 using namespace System.Management.Automation.Language
 
-function findEditorSimpleFunctions {
+function Find-EditorSimpleFunction {
     <#
     .SYNOPSIS
     Gets the first selected simple function and returns a pscustomobject with its parameters and attributes.
@@ -127,4 +127,4 @@ function findEditorSimpleFunctions {
             }
         }
     }
-} # findEditorSimpleFunctions
+} # Find-EditorSimpleFunction

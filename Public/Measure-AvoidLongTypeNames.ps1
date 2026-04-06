@@ -1,5 +1,6 @@
 #Requires -Version 5.0
 
+using namespace System.Diagnostics.CodeAnalysis
 using namespace System.Management.Automation
 using namespace System.Management.Automation.Language
 using namespace System.Collections.ObjectModel
@@ -35,12 +36,14 @@ function Measure-AvoidLongTypeNames {
         $ScriptBlockAst,
 
         [hashtable]
-        $Settings
+        $Settings = @{
+            Enable    = $true
+            MaxLength = 40
+        }
     )
 
     begin {
         $RuleName = 'PSAvoidLongTypeNames'
-        [int]$MaxTypeNameLength = 30
         [int]$endLine = 1
         $defaultNamespaces = [string[]]@(
             'System'
@@ -49,15 +52,13 @@ function Measure-AvoidLongTypeNames {
     }
 
     process {
-        $DiagnosticRecords = [List[DiagnosticRecord]]::new()
-
-        if ($Settings -and -not $Settings.ContainsKey('Enable')) {
+        if (-not $Settings.Enable) {
             return
         }
 
-        if ($Settings -and $Settings.ContainsKey('MaxLength')) {
-            $MaxTypeNameLength = $Settings['MaxLength']
-        }
+        $MaxTypeNameLength = $Settings.MaxLength
+
+        $DiagnosticRecords = [List[DiagnosticRecord]]::new()
 
         try {
             # Find all "requires" comment tokens and save the last line extent
@@ -72,7 +73,7 @@ function Measure-AvoidLongTypeNames {
         # if we have requires statements, set the target "using namespace" line to one after the last entry
         if ($RequiresStatements) {
             $endLine = $RequiresStatements.ForEach({$_.Extent.EndLineNumber + 1}) | Sort-Object | Select-Object -Last 1
-            Write-Verbose "${RuleName}: Found requires statement(s) prior to $endLine"
+            Write-Verbose "${RuleName}: Found $($RequiresStatements.Count) requires statement(s) prior to $endLine"
         }
 
         # Alternate method
@@ -92,7 +93,7 @@ function Measure-AvoidLongTypeNames {
         }
         catch {
             $Err = $_
-            throw "Exception $($Err.Exception.HResult) traversing 'using namespace' AST entries > $($Err.Exception.Message)"
+            throw "Exception $($Err.Exception.HResult) traversing 'using' AST statements > $($Err.Exception.Message)"
         }
 
         $lineOneExtent = $ScriptBlockAst.Find({
@@ -102,22 +103,28 @@ function Measure-AvoidLongTypeNames {
                 $ast.EndLineNumber -eq 1
             }, $true)
 
-        # FIXME: existingNamespaceLastLine is not getting updated properly
-        $existingNamespaces = $defaultNamespaces + ($existingUsings.Where({$_.UsingStatementKind -eq 'Namespace'}) | % { $_.Name.Value }) | select -Unique
-        $existingNamespaceLastLine = $existingUsings | % { $_.Extent.EndLineNumber + 1 } | Sort-Object | select -Last 1
+        $existingNamespaces = $defaultNamespaces + ($existingUsings.Where({$_.UsingStatementKind -eq 'Namespace'}) | % { $_.Name.Value }) | Select-Object -Unique
+        $existingUsingLastLine = $existingUsings | % { $_.Extent.EndLineNumber + 1 } | Sort-Object | Select-Object -Last 1
 
-        if ($existingNamespaceLastLine) {
-            $endLine = [Math]::Max($endLine, $existingNamespaceLastLine)
-            Write-Verbose "${RuleName}: Found $($existingUsings.Count) using statements up to $endLine"
+        if ($existingUsingLastLine) {
+            $endLine = [Math]::Max($endLine, $existingUsingLastLine)
+            Write-Verbose "${RuleName}: Found $($existingUsings.Count) using statement(s) up to line $endLine"
         }
 
         try {
-            # Find type expressions
+            # SECTION: Find type expressions
+            # TODO: Handle AttributeAst type usages, e.g. [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute()]
+            # New-Object: $ast -is [CommandAst] -and $ast.GetCommandName() -eq 'New-Object'
+            #   [StaticBindingResult]$sbResults = [StaticParameterBinder]::BindCommand($CommandAst, $true)
+            #   $sbResults.BoundParameters['TypeName'].ConstantValue
             $typeExpressions = $ScriptBlockAst.FindAll({
                     param ($ast)
-                    $ast -is [TypeExpressionAst] -or
-                    $ast -is [TypeConstraintAst]
+                    ($ast -is [TypeExpressionAst] -or
+                    $ast -is [TypeConstraintAst]) -and
+                    $ast.TypeName.Name.Contains('.') -and
+                    ($ast.TypeName.FullName.Contains(',') -and $ast.TypeName.GenericArguments)
                 }, $true)
+            Write-Verbose "${RuleName}: Found $($typeExpressions.Count) type expressions"
         }
         catch {
             $Err = $_
@@ -127,10 +134,13 @@ function Measure-AvoidLongTypeNames {
         # Group by namespace to avoid conflicts
         $classNameUsage = @{}
 
+        # SECTION: Analyze each type expression
         foreach ($typeExpr in $typeExpressions) {
-            $typeFullName = $typeExpr.TypeName.Name
-            $typeName = $typeExpr.TypeName.TypeName
-            $typeType = $typeExpr.TypeName.GetReflectionType()
+            Write-Verbose "${RuleName}: Analyzing type expression $($typeExpr.Extent.Text) at line $($typeExpr.Extent.StartLineNumber)"
+            $typeFullName = $typeExpr.TypeName.Name # List[string]
+            $typeName = $typeExpr.TypeName.TypeName # <typename> List
+            # this will return null if it's an assembly-qualified type, e.g. [System.String, mscorlib], so we need to handle that case in future
+            $typeType = $typeExpr.TypeName.GetReflectionType() # <type> List`1
             $assemblyType = $typeExpr.TypeName.AssemblyName
             # this only exists for parameterized types
             if ($typeName) {
@@ -139,16 +149,17 @@ function Measure-AvoidLongTypeNames {
             else {
                 $typeNameShort = $typeType.Name
             }
-            $typeArgs = $typeExpr.TypeName.GenericArguments
+            $typeArgs = $typeExpr.TypeName.GenericArguments # string
 
             $suggestedCorrections = [Collection[CorrectionExtent]]::new()
 
-            if ($typeFullName.Length -le $MaxTypeNameLength -or -not $typeFullName.Contains('.')) {
+            if ($typeFullName.Length -le $MaxTypeNameLength) {
                 continue
             }
 
             $namespace = $typeType.Namespace
             $className = $typeType.Name
+            $fullName = $typeType.FullName
             $parentIsClass = $false
 
             if ($typeExpr.Parent -is [TypeDefinitionAst]) {
@@ -166,7 +177,8 @@ function Measure-AvoidLongTypeNames {
 
                 $classNameUsage[$className] = @{
                     Classname = $typeNameShort
-                    Namespace = $namespace
+                    FullName  = $typeType.FullName
+                    Namespace = $typeType.Namespace
                 }
 
                 $extent = $typeExpr.Extent
@@ -181,6 +193,7 @@ function Measure-AvoidLongTypeNames {
                         # namespace = Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic
                         # name = DiagnosticRecord
                         # fullname = Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord
+                        Write-Verbose " ${RuleName}: Analyzing type parameter $($typeArg.Name)"
                         $typeArgOriginal = $typeArg.Name
                         $typeArgType = $typeArg.GetReflectionType()
                         $typeArgNamespace = $typeArgType.Namespace
@@ -203,10 +216,11 @@ function Measure-AvoidLongTypeNames {
                                 $existingNamespaces += $typeArgNamespace
                                 $classNameUsage[$typeArgName] = @{
                                     Classname = $typeArgNameShort
+                                    FullName  = $typeArgFullName
                                     Namespace = $typeArgNamespace
                                 }
                                 # $endLine++
-                                Write-Verbose "${RuleName}: Added correction 'using namespace $typeArgNamespace' for type parameter $typeArgName at $endLine"
+                                Write-Verbose "  ${RuleName}: Added correction 'using namespace $typeArgNamespace' for type parameter $typeArgName at $endLine"
                             }
                         }
                         # construct type param string
@@ -223,12 +237,8 @@ function Measure-AvoidLongTypeNames {
                 # SECTION: Using namespace correction
                 if ($namespace -notin $existingNamespaces) {
                     $addedUsingNamespace = "using namespace $namespace`n"
-                    if ($endLine -eq 1) {
-                        $endCol = 1
-                    }
-                    else {
-                        $endCol = $addedUsingNamespace.Length
-                    }
+                    # if ($endLine -eq 1) { $endCol = 1 }
+                    $endCol = $addedUsingNamespace.Length
                     $suggestedCorrections.Add([CorrectionExtent]::new(
                             $endLine,
                             $endLine,
@@ -258,6 +268,8 @@ function Measure-AvoidLongTypeNames {
                     $correctedLengthDifference = $correctedText.Length - $originalText.Length
                 }
 
+                $CorrectionExtent = New-Object Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.CorrectionExtent
+
                 $suggestedCorrections.Add([CorrectionExtent]::new(
                         $extent.StartLineNumber,
                         $extent.EndLineNumber,
@@ -269,6 +281,32 @@ function Measure-AvoidLongTypeNames {
                     ))
 
                 Write-Verbose "${RuleName}: Added correction '$correctedText` at line $($extent.StartLineNumber)"
+
+                #region: Calculate saved space
+                <# For each type usage:
+                foreach ($classEntry in $classNameUsage.GetEnumerator()) {
+                    $typeNameClean = $classEntry.Value.Classname
+                    $namespace = $classEntry.Value.Namespace
+                    $fullTypeName = $classEntry.Value.FullName
+                }
+                $fullTypeLength = $typeType.FullName.Length  # e.g., "System.Collections.Generic.List"
+                $shortTypeLength = $typeNameClean.Length  # e.g., "List"
+                $usingStatementLength = "using namespace $namespace`n".Length  # e.g., 37 chars
+
+                # Count all usages of this type in the file
+                $typeUsageCount = $typeExpressions.Where({
+                        $_.TypeName.GetReflectionType().FullName -eq $typeType.FullName
+                    }).Count
+
+                # Net savings calculation
+                $savedPerUsage = $fullTypeLength - $shortTypeLength  # e.g., 32 - 4 = 28
+                $totalSaved = ($savedPerUsage * $typeUsageCount) - $usingStatementLength
+
+                # Only suggest if net positive
+                if ($totalSaved -gt 0) {
+                    # Add diagnostic record
+                } #>
+                #endregion: Calculate saved space
 
                 # SECTION: Diagnostic record
                 $DiagnosticRecords.Add([DiagnosticRecord]::new(

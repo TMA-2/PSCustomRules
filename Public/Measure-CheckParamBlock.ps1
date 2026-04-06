@@ -7,18 +7,18 @@ using namespace System.Collections.Generic
 using namespace Microsoft.Windows.PowerShell.ScriptAnalyzer
 using namespace Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic
 
-# PSCheckParamBlockParen
-function Measure-CheckParamBlockParen {
+# PSCheckParamBlock
+function Measure-CheckParamBlock {
     <#
     .SYNOPSIS
-    Looks for parameter blocks without a space between 'param' and opening parenthesis.
+    Looks for parameter blocks and adjusts their formatting based on a number of settings.
     .DESCRIPTION
-    Finds parameter blocks without a space between the keyword and the opening parenthesis, and corrects them by adding a space.
+    Finds parameter blocks that don't match formatting standards like having a line between parameters, having the type and variable on separate lines, newlines between attributes, etc.
     .PARAMETER ScriptBlockAst
     The script block AST to analyze.
     This parameter is automatically provided by PSScriptAnalyzer.
     .EXAMPLE
-    PS C:\> Measure-CheckParamBlockParen -ScriptBlockAst $scriptBlockAst
+    PS C:\> Measure-CheckParamBlock -ScriptBlockAst $scriptBlockAst
 
     Analyzes the provided script block AST for parameter blocks without a space between 'param' and the opening parenthesis.
     .NOTES
@@ -29,21 +29,27 @@ function Measure-CheckParamBlockParen {
     param(
         [Parameter(Mandatory)]
         [ScriptBlockAst]
-        $ScriptBlockAst
+        $ScriptBlockAst,
+
+        [hashtable]
+        $Settings = @{
+            CheckParamWhitespace         = $true
+            CheckNewlineAfterParam       = $true
+            CheckSeparateTypeAndVariable = $true
+            CheckSeparateAttributes      = $true
+        }
     )
 
-    process {
+    begin {
         $DiagnosticRecords = [List[DiagnosticRecord]]::new()
+    }
 
+    process {
         try {
             $violations = $ScriptBlockAst.FindAll({
                     param ($ast)
-                    # Find param blocks without proper spacing: param( or param\n(
-                    # Exclude properly spaced: param (
                     if ($ast -is [ParamBlockAst]) {
                         $text = $ast.Extent.Text
-                        # Match param( directly OR param with non-space whitespace before (
-                        ($text -match '^param\(') -or ($text -match '^param[\r\n\t]')
                     }
                 }, $true)
         }
@@ -101,10 +107,10 @@ function Measure-CheckParamBlockParen {
                     $DiagnosticRecords.Add([DiagnosticRecord]::new(
                             'Add space between param keyword and open parenthesis',
                             $diagnosticExtent,
-                            'PSCheckParamBlockParen',
+                            'PSCheckParamBlock',
                             [DiagnosticSeverity]::Information,
                             $extent.File,
-                            'PSCheckParamBlockParen',
+                            'PSCheckParamBlock',
                             $suggestedCorrections
                         ))
                 }

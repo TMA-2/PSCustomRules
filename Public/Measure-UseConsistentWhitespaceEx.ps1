@@ -16,7 +16,19 @@ function Measure-UseConsistentWhitespaceEx {
         )]
         [ValidateNotNullOrEmpty()]
         [ScriptBlockAst]
-        $ScriptBlockAst
+        $ScriptBlockAst,
+
+        [hashtable]
+        $Settings = @{
+            # not, bnot, join
+            CheckOperator = $true
+            # while(){}
+            CheckWhileStatements = $true
+            # o{}while()
+            CheckDoWhileStatements = $true
+            # do{}until()
+            CheckDoUntilStatements = $true
+        }
     )
 
     begin {
@@ -39,6 +51,12 @@ function Measure-UseConsistentWhitespaceEx {
             $Err = $_
             throw "Exception $($Err.Exception.HResult) parsing AST for commands > $($Err.Exception.Message)"
         }
+
+        #region Main Region
+        foreach ($Violation in $Violations) {
+            <# fill out #>
+        }
+        #endregion Main Region
 
         try {
             foreach ($Violation in $Violations) {

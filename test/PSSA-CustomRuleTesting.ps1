@@ -3,6 +3,7 @@
 #region PSAvoidLongTypeNames testing
 using namespace System.Collections.Specialized
 using namespace System.Management.Automation
+using module PSStyleEx
 using assembly 'c:\Program Files\PowerShell\7\Microsoft.PowerShell.Commands.Utility.dll'
 # this comment should not get overwritten by the rule!
 
@@ -49,15 +50,27 @@ $testHT = @{
 
 $testHT = @{
     RegularKey = 'test'
-    KeyWithStreamComment <# hi there, I'm fucking this all up! #> = 'oh no'
-    KeyWithBlockComment = 'still works' # just a normal comment
+    <# I'm in ur hashtable #> KeyWithStreamCommentPreName = 'test'
+    KeyWithStreamCommentPreAssignment <# this comment will be stripped #> = 'get out of there'
+    KeyWithStreamCommentPostAssignment = <# this one won't #> 'oh okay'
+    KeyWithBlockComment = 'still works' # just a normal hanging block comment
 }
+
+#region PSAvoidOutNull testing
+# CommandAst: [CommandElementAst]CommandElements[0].Value
+Get-Process | Out-Null
+$Services = Get-Service
+# CommandExpressionAst: [VariableExpressionAst]Expression.ToString()
+$Services | Out-Null
+# CommandExpressionAst: [InvokeMemberExpressionAst]Expression.Extent.Value
+[System.Diagnostics.Process]::Start('notepad.exe') | Out-Null
+#endregion PSAvoidOutNull testing
 
 #region PSAlignEnumStatement testing
 Enum TestEnum {
     Unknown = -1 # Test block comment handling
-    Boot <# Test stream comment handling #> = 0
-    System = 1
+    Boot = <# Test stream comment handling #> 0
+    <# Test stream comment handling #> System = 1
     Auto = 2
     Automatic = 2
     Manual = 3
@@ -69,7 +82,7 @@ Enum TestEnumBitwise {
     ValueZero # Implied value
     <# Pre-member #> ValueTwo = 0x02
     ValueEight = <# Post-assignment #> 0x08
-    ValueSixteen <# Pre-assignment #> = 0x10
+    ValueSixteen <# Pre-assignment (strip this) #> = 0x10
 }
 #endregion PSAlignEnumStatement testing
 
@@ -230,6 +243,27 @@ function Test-ParamSpace {
 #endregion PSCheckParamBlockParen testing
 
 #region Keyword and Unary Operators
+# Unary Operators
+
+-bnot0x01
+-not$true
+-join@(1,2,3)
+
+# while
+while($true) {
+    <# Loop action #>
+}
+
+# do while
+do{
+    <# Loop action #>
+}while($true)
+
+# do until
+do{
+    <# Loop action #>
+}until($true)
+
 # if, elseif
 if($true) {
     <# Action to perform if the condition is true #>
@@ -237,26 +271,17 @@ if($true) {
 elseif($false) {
     <# Action to perform if the condition is false #>
 }
+
 # for
 for($i = 0; $i -lt $Error.Count; $i++) {
     <# Action that will repeat until the condition is met #>
 }
+
 # foreach
 foreach($Item in $Col) {
     <# $Item is the current item #>
 }
-# while
-while($true) {
-    <# Loop action #>
-}
-# do while
-do {
-    <# Loop action #>
-}while($true)
-# do until
-do {
-    <# Loop action #>
-}until($true)
+
 # switch
 switch($x) {
     1 {

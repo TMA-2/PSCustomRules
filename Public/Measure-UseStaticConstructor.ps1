@@ -68,36 +68,94 @@ function Measure-UseStaticConstructor {
 
             foreach ($CommandAst in $CommandAsts) {
                 [StaticBindingResult]$sbResults = [StaticParameterBinder]::BindCommand($CommandAst, $true)
-                if ($sbResults.BoundParameters.ContainsKey('ComObject')) {
-                    # we can't do anything to convert ComObject creation, so continue
+                if ($sbResults.BoundParameters.ContainsKey('ComObject') -or $sbResults.BoundParameters.ContainsKey('Property')) {
+                    # we can't do anything to convert ComObject creation
+                    # we don't handle the -Property parameter
                     continue
                 }
+
                 # get typename parameter
                 if ($sbResults.BoundParameters.ContainsKey('TypeName')) {
                     $TypeName = $sbResults.BoundParameters['TypeName'].ConstantValue
                 }
+
                 # get argument list parameter
                 if ($sbResults.BoundParameters.ContainsKey('ArgumentList')) {
-                    # this goes *way* deeper potentially than we need, but it works for now
-                    $ArgumentList = $sbResults.BoundParameters['ArgumentList'].Value.SubExpression.Extent.Text
-                    $ArgumentType = $sbResults.BoundParameters['ArgumentList'].Value.StaticType
-                }
-                if ($TypeName) {
-                    # Find full type name
-                    $FullType = Find-Type -TypeName $TypeName -Exact
-                    # $FullType = [appdomain]::CurrentDomain.GetAssemblies().GetTypes().Where({ $_.IsPublic -and ($_.FullName -eq $TypeName -or $_.FullName -match "[\w.]+\.${TypeName}$" -or ($_.Name -eq $TypeName -and $_.Namespace -eq 'System')) })
+                    $argValue = $sbResults.BoundParameters['ArgumentList'].Value
 
-                    if (-not $FullType) {
-                        Write-Verbose "Type $TypeName not found in loaded assemblies."
-                        continue
+                    switch ($argValue) {
+                        { $_ -is [ArrayExpressionAst] } {
+                            # -ArgumentList @(a,b)
+                            $elements = $argValue.SubExpression.Statements[0].PipelineElements[0].Expression.Elements
+
+                            $ArgumentList = ($elements.ForEach{$_.Extent.Text}) -join ', '
+                            break
+                        }
+                        { $_ -is [ArrayLiteralAst] } {
+                            # -ArgumentList ,a  OR  -ArgumentList a,b
+                            $ArgumentList = ($argValue.Elements.ForEach{$_.Extent.Text}) -join ', '
+                            break
+                        }
+                        { $_ -is [ParenExpressionAst] } {
+                            # -ArgumentList (a,b)
+                            $elements = $argValue.Pipeline.PipelineElements[0].Expression.Elements
+                            $ArgumentList = ($elements.ForEach{$_.Extent.Text}) -join ', '
+                            break
+                        }
+                        default {
+                            # -ArgumentList a
+                            $ArgumentList = $argValue.Extent.Text
+                        }
+                    }
+
+                    <# Old method
+                    if ($argValue -is [CommandElementAst]) {
+                        # alternately, just get the extent text of the entire argument list and use that as the argument list for the static constructor, since it will be the same text either way
+                        # $ArgumentList = $sbResults.BoundParameters['ArgumentList'].Value.Pipeline.Extent.Text
+                        $ArgumentList = [List[string]]::new()
+                        $argValue.Pipeline.PipelineElements.Expression.Elements | % {
+                            # can also switch based on $_.GetType() i.e. VariableExpressionAst, StringConstantExpressionAst, etc.
+                            $ArgumentList.Add($_.Extent.Text)
+                        }
+                        $ArgumentList = $ArgumentList -join ', '
+                    }
+                    elseif ($argValue -is [ParenExpressionAst]) {
+                        $ArgumentList = [List[string]]::new()
+                        $argValue.Pipeline.PipelineElements.Expression.Elements | % {
+                            $ArgumentList.Add($_.Extent.Text)
+                        }
+                        $ArgumentList = $ArgumentList -join ', '
+                    }
+                    else {
+                        $ArgumentList = $argValue.SubExpression.Extent.Text
+                        $ArgumentType = $argValue.StaticType
+                    }
+                    #>
+                }
+
+                # only highlight the command
+                $NewObjectExtent = $CommandAst.CommandElements.Where({$_.Value -eq 'New-Object'}).Extent
+
+                if ($TypeName) {
+                    try {
+                        # Find full type name
+                        $FullType = Find-Type -TypeName $TypeName -Exact
+                        # $FullType = [appdomain]::CurrentDomain.GetAssemblies().GetTypes().Where({ $_.IsPublic -and ($_.FullName -eq $TypeName -or $_.FullName -match "[\w.]+\.${TypeName}$" -or ($_.Name -eq $TypeName -and $_.Namespace -eq 'System')) })
+
+                        if (-not $FullType) {
+                            throw [TypeLoadException]::new("Type $TypeName not found in loaded assemblies.")
+                        }
+                    }
+                    catch {
+                        $Err = $_
+                        throw "Exception $($Err.Exception.HResult) finding type $TypeName > $($Err.Exception.Message)"
                     }
 
                     try {
                         # Find constructors
                         $TypeCtors = $FullType.GetConstructors()
                         if ($TypeCtors.Count -eq 0) {
-                            Write-Verbose "No public constructors found for type $TypeName"
-                            return
+                            throw "No public constructors found for type $TypeName"
                         }
                     }
                     catch {
@@ -118,6 +176,11 @@ function Measure-UseStaticConstructor {
                     if ($ArgumentList) {
                         [string]$correction = "[$TypeName]::new($ArgumentList)"
                     }
+                    elseif ($TypeProperties) {
+                        $props = $TypeProperties.GetEnumerator() | ForEach-Object { "$($_.Key) = $($_.Value)" }
+                        $propsString = $props -join '; '
+                        [string]$correction = "[$TypeName]@{ $propsString }"
+                    }
                     else {
                         [string]$correction = "[$TypeName]::new()"
                     }
@@ -137,10 +200,13 @@ function Measure-UseStaticConstructor {
                         ))
                     # $suggestedCorrections = New-Object System.Collections.ObjectModel.Collection[$($objParams.TypeName)]
                     # $suggestedCorrections.add($correctionExtent) | Out-Null
-
+                    [Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+                        <#Category#>'PSUseDeclaredVarsMoreThanAssignments',<#CheckId#>$null,
+                        Justification = 'Reason for suppressing'
+                    )]
                     $result = [DiagnosticRecord]::new(
                         'Consider using static constructor instead of New-Object to instantiate classes.',
-                        $commandAst.Extent,
+                        $NewObjectExtent,
                         'PSUseStaticConstructor',
                         [DiagnosticSeverity]::Information,
                         $CommandAst.Extent.File,
@@ -153,7 +219,7 @@ function Measure-UseStaticConstructor {
                     # $result = New-Object -Typename "DiagnosticRecord" -ArgumentList $Messages.MeasureComObject,$sbResult.BoundParameters["ComObject"].Value.Extent,$PSCmdlet.MyInvocation.InvocationName,Warning,$null
                     $result = [DiagnosticRecord]::new(
                         'Use static New constructor instead of New-Object cmdlet to create objects.',
-                        $CommandAst.Extent,
+                        $NewObjectExtent,
                         'PSUseStaticConstructor',
                         [DiagnosticSeverity]::Information,
                         $CommandAst.Extent.File
@@ -172,6 +238,6 @@ function Measure-UseStaticConstructor {
     }
 
     end {
-        [System.Runtime.InteropServices.Marshal]::ReleaseComObject($TestComObj) | Out-Null
+        # [System.Runtime.InteropServices.Marshal]::ReleaseComObject($TestComObj) | Out-Null
     }
 }

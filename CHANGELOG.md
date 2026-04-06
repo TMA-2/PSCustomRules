@@ -4,7 +4,56 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.7.14] - 2026-04-03
+
+> The "PSUseStaticConstructor Update"
+
+### Changed
+- `PSUseStaticConstructor`: Stopped handling the `-Property` parameter of `New-Object` as the correction logic is complex and error-prone
+- Diagnostic extent for `PSUseStaticConstructor` now only covers the `New-Object` command
+- Renamed findEditorSimpleFunctions to `Find-EditorSimpleFunction` along with the filename
+- Renamed findEditorParamBlocks to `Find-EditorParamBlock` along with the filename
+
+### Fixed
+- `PSUseStaticConstructor` handles ArgumentList properly by its AST type (ArrayExpression, ArrayLiteral, and ParenExpression)
+- `PSUseStaticConstructor` throws a TypeLoadException when the type is not found, or has no constructors
+
+## [1.7.13] - 2026-03-30
+
+### Fixed
+
+- Fixed `UseStaticConstructor` handling of CommandElementAst: `$sbResults.BoundParameters['ArgumentList'].Value.Pipeline.GetPureExpression().Elements`, then joining each element's extent text together.
+
+## [1.7.12] - 2026-02-18
+
+### Fixed
+- Corrected `using` line counting in `Measure-AvoidLongTypeNames` by changing from the `.ForEach()` method to `Foreach-Object`.
+
+### Removed
+- Disabled finding of assembly-qualified types, e.g. `[System.String, mscorlib]`, since `GetReflectionType()` returns null.
+
+## [1.7.11] - 2026-02-12
+
+### Changed
+- `CheckParamBlockParen` is now `CheckParamBlock` with multiple settings:
+  - `CheckParamWhitespace` inserts whitespace betweeen param and `(`
+  - `CheckNewlineAfterParam` inserts an extra newline between parameters
+  - `CheckSeparateTypeAndVariable` inserts a newline between parameter types and names
+  - `CheckSeparateAttributes` inserts a newline between attribute properties
+
+## [0.7.11] - 2025-11-26
+
+### Added
+- `EmptyLineBetweenParams` setting to `Measure-AvoidSimpleFunctions` to control whether empty lines are added between parameters
+- `ParamTypeOnNewLine` setting to `Measure-AvoidSimpleFunctions` to control whether a newline was inserted between parameter types and names
+
+### Fixed
+- `Measure-AvoidSimpleFunctions` was one space short on attribute value indentation
+
+## [0.7.10] - 2025-11-25
+
+### Added
+- Initial version of `Measure-AvoidOutNull` rule to detect and suggest alternatives to `Out-Null` usage
 
 ### Fixed
 - `Measure-AvoidLongTypeNames` added check for class parent definitions to exclude brackets from constructed class names

@@ -3,9 +3,11 @@
     IncludeRules   = @(
         'Measure-AlignEnumStatement'
         'Measure-AvoidLongTypeNames'
+        'Measure-AvoidOutNull'
         'Measure-AvoidSimpleFunctions'
-        # 'Measure-CheckParamBlockParen'
+        # 'Measure-CheckParamBlock'
         # 'Measure-TypedVariableSpacing'
+        'Measure-UseConsistentWhitespaceEx' # Stopgap fix for some things PSSA doesn't handle (full or partial), such as param(), {}until(), {}while(), -join, -not, -bnot.
         'Measure-UseStaticConstructor'
     )
 
@@ -21,9 +23,16 @@
             MaxLength = 30
         }
 
+        PSAvoidOutNull         = @{
+            Enable               = $true
+            PreferNullAssignment = $false
+        }
+
         PSAvoidSimpleFunctions = @{
-            Enable  = $true
-            AddHelp = $false
+            Enable                 = $true
+            AddHelp                = $false
+            EmptyLineBetweenParams = $true
+            ParamTypeOnNewLine     = $false
         }
     }
 }

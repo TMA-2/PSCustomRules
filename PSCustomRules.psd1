@@ -11,7 +11,7 @@
     RootModule           = 'PSCustomRules.psm1'
 
     # Version number of this module.
-    ModuleVersion        = '0.6.10'
+    ModuleVersion        = '0.7.12'
 
     # Supported PSEditions
     CompatiblePSEditions = 'Core', 'Desktop'
@@ -76,6 +76,7 @@
     FunctionsToExport    = @(
         'Measure-AlignEnumStatement'
         'Measure-AvoidLongTypeNames'
+        'Measure-AvoidOutNull'
         'Measure-AvoidSimpleFunctions'
         'Measure-CheckParamBlockParen'
         'Measure-TypedVariableSpacing'

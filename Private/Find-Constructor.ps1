@@ -1,5 +1,12 @@
 function Find-Constructor {
+    [OutputType('pscustomobject[]')]
+    [CmdletBinding()]
     param (
+        [Parameter(
+            Mandatory,
+            Position = 0,
+            ValueFromPipeline
+        )]
         [type]
         $Type
     )
@@ -16,16 +23,20 @@ function Find-Constructor {
 
         foreach ($TypeCtor in $TypeCtors) {
             $CtorParams = $TypeCtor.GetParameters()
-            "Ctor Overload Params: $($CtorParams.Count)"
+            Write-Verbose "Ctor Overload Params: $($CtorParams.Count)"
             $CtorParamOutput = [pscustomobject[]]@()
-            $CtorParams | ForEach-Object {
+            $CtorParams | Sort-Object Position | ForEach-Object {
+                $OverloadDisplay = "$($_.ParameterType.FullName) $($_.Name)"
+                if ($_.HasDefaultValue) {
+                    $OverloadDisplay += " = $(if($null -eq $_.DefaultValue) { 'null' } else { $_.DefaultValue })"
+                }
                 $CtorParam = [pscustomobject]@{
                     Name         = $_.Name
                     Type         = $_.ParameterType
-                    DefaultValue = $null
-                }
-                if (![string]::IsNullOrEmpty($_.DefaultValue)) {
-                    $CtorParam.DefaultValue = $_.DefaultValue
+                    Position     = $_.Position
+                    Required     = -not $_.IsOptional
+                    DefaultValue = $_.DefaultValue
+                    Display      = $OverloadDisplay
                 }
                 $CtorParamOutput += $CtorParam
             }

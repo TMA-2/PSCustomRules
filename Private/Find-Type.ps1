@@ -1,5 +1,5 @@
 function Find-Type {
-    [CmdletBinding(DefaultParameterSetName = 'Predicate')]
+    [CmdletBinding()]
     param (
         [Parameter(
             Mandatory,
@@ -43,28 +43,43 @@ function Find-Type {
             })
         #>
         try {
-            $AllAssemblies = [appdomain]::CurrentDomain.GetAssemblies()
+            # $AllAssemblies = [appdomain]::CurrentDomain.GetAssemblies().Where({ $_.FullName -notmatch '(System\.Data\.SqlClient|Azure\.Data\.Tables).*' })
 
             if ($Exact) {
                 # Try a direct search for the type name
                 $Type = [type]::GetType($TypeName, $false, $true)
-                if (-not $Type) {
+                if ($Type) {
+                    return $Type
+                }
+                else {
                     # Look for the type name in loaded assemblies
-                    foreach ($assembly in $AllAssemblies) {
+                    foreach ($assembly in [appdomain]::CurrentDomain.GetAssemblies()) {
                         $Type = $assembly.GetType($TypeName, $false, $true)
                         if ($Type) {
-                            break
+                            return $Type
                         }
                     }
                 }
             }
-            elseif($Predicate) {
+            else {
+                $AllTypes = foreach ($asm in [appdomain]::CurrentDomain.GetAssemblies()) {
+                    try {
+                        $asm.GetTypes()
+                    }
+                    catch [System.Reflection.ReflectionTypeLoadException] {
+                        $Err = $_
+                        $Err.Exception.Types | Where-Object { $_ }
+                    }
+                }
+            }
+
+            if ($Predicate) {
                 # Look for the type name using the provided predicate scriptblock
-                $Type = $AllAssemblies.GetTypes() | Where-Object -FilterScript $Predicate
+                $AllTypes | Where-Object -FilterScript $Predicate
             }
             else {
                 # Look for the type name (fuzzy search) in loaded assemblies
-                $Type = $AllAssemblies.GetTypes() | Where-Object -FilterScript {
+                $AllTypes | Where-Object -FilterScript {
                     $_.IsPublic -and
                     (
                         $_.FullName -like $TypeName -or
@@ -73,12 +88,12 @@ function Find-Type {
                 }
             }
 
-            if (-not $Type) {
+            <# if (-not $AllTypes -or $AllTypes.Count -eq 0) {
                 Write-Verbose "Type '$TypeName' not found."
                 return $null
             }
-
-            return $Type
+            return $AllTypes
+            #>
         }
         catch {
             $Err = $_
